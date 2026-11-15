@@ -9,7 +9,6 @@ if (!indieauth_server_available()) {
 }
 start_admin_session();
 maybe_restore_admin_from_cookie();
-indieauth_send_interaction_headers();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['grant_type'])) {
     try {
@@ -46,6 +45,8 @@ if (!is_array($pending) || time() - (int) ($pending['created_at'] ?? 0) > 600) {
     unset($_SESSION['indieauth_pending_request']);
     indieauth_send_json(['error' => 'invalid_request', 'error_description' => 'Authorization request is missing or expired.'], 400);
 }
+
+indieauth_send_interaction_headers((string) $pending['redirect_uri']);
 
 if (!is_admin_logged_in()) {
     set_admin_login_return_path(base_path() . '/indieauth/authorize.php');

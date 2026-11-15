@@ -45,6 +45,22 @@ try {
     indieauth_test_assert(!is_dir(PUREBLOG_PLUS_DATA_PATH), 'IndieAuth registration initialized storage eagerly.');
     indieauth_test_assert(indieauth_canonical_me() === 'http://localhost/', 'Canonical profile URL is wrong.');
     indieauth_test_assert(indieauth_server_available(), 'Local development origin was not available.');
+    $loginCsp = indieauth_interaction_csp();
+    indieauth_test_assert(str_contains($loginCsp, "form-action 'self';"), 'Login CSP allows an external form action.');
+    $outpostCsp = indieauth_interaction_csp('https://jimmitchell.dev/outpost/auth/callback/');
+    indieauth_test_assert(
+        str_contains($outpostCsp, "form-action 'self' https://jimmitchell.dev;"),
+        'Consent CSP does not allow the validated client origin.'
+    );
+    indieauth_test_assert(!str_contains($outpostCsp, '/outpost/'), 'Consent CSP copied a redirect path.');
+    indieauth_test_assert(
+        str_contains(indieauth_interaction_csp('outpost://auth/callback'), "form-action 'self' outpost:;"),
+        'Consent CSP does not support a validated native callback scheme.'
+    );
+    indieauth_test_throws(
+        static fn(): string => indieauth_interaction_csp("https://client.example' unsafe-inline/callback"),
+        'invalid_request'
+    );
     indieauth_test_throws(static fn(): string => indieauth_validate_client_id('https://client.example'), 'invalid_request');
     indieauth_test_throws(static fn(): string => indieauth_validate_redirect_uri('javascript:alert(1)'), 'invalid_request');
     indieauth_test_assert(

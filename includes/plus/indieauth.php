@@ -59,11 +59,41 @@ function indieauth_endpoint_url(string $path): string
     return indieauth_base_url() . '/' . ltrim($path, '/');
 }
 
-function indieauth_send_interaction_headers(): void
+function indieauth_interaction_form_action_source(string $redirectUri): string
+{
+    $redirectUri = indieauth_validate_redirect_uri($redirectUri);
+    $parts = parse_url($redirectUri);
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        return $scheme . ':';
+    }
+
+    $host = strtolower((string) ($parts['host'] ?? ''));
+    if (filter_var($host, FILTER_VALIDATE_IP) === false
+        && preg_match('/^[a-z0-9.-]+$/', $host) !== 1) {
+        throw new IndieAuthProtocolException('invalid_request', 'Redirect URI host is invalid.');
+    }
+    $hostForPolicy = str_contains($host, ':') ? '[' . $host . ']' : $host;
+    $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+    return $scheme . '://' . $hostForPolicy . $port;
+}
+
+function indieauth_interaction_csp(?string $redirectUri = null): string
+{
+    $formAction = "'self'";
+    if ($redirectUri !== null) {
+        $formAction .= ' ' . indieauth_interaction_form_action_source($redirectUri);
+    }
+    return "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        . "script-src 'self' 'unsafe-inline'; form-action " . $formAction
+        . "; frame-ancestors 'none'; base-uri 'none'";
+}
+
+function indieauth_send_interaction_headers(?string $redirectUri = null): void
 {
     header('Referrer-Policy: no-referrer');
     header('Cache-Control: no-store');
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    header('Content-Security-Policy: ' . indieauth_interaction_csp($redirectUri));
     header('X-Frame-Options: DENY');
 }
 
