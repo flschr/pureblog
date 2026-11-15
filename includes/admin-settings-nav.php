@@ -10,6 +10,7 @@ $settingsItems = [
     '/admin/settings-theme.php'   => ['label' => t('admin.settings.nav.theme'),   'icon' => 'paintbrush'],
     '/admin/settings-css.php'     => ['label' => t('admin.settings.nav.css'),     'icon' => 'braces'],
     '/admin/settings-plugins.php' => ['label' => t('admin.settings.nav.plugins'), 'icon' => 'toggle-right'],
+    '/admin/settings-social.php'  => ['label' => t('admin.settings.nav.social'),  'icon' => 'globe'],
     '/admin/settings-user.php'    => ['label' => t('admin.settings.nav.user'),    'icon' => 'user'],
     '/admin/settings-updates.php' => ['label' => t('admin.settings.nav.updates'), 'icon' => 'upgrade'],
 ];

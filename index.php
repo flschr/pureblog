@@ -42,6 +42,11 @@ if (str_ends_with($requestPath, '.md')) {
     exit;
 }
 
+if ($requestPath === 'social' && !empty(social_connection()['public_enabled'])) {
+    require __DIR__ . '/social.php';
+    exit;
+}
+
 $customRoutes = parse_custom_routes((string) ($config['custom_routes'] ?? ''));
 foreach ($customRoutes as $customRoute) {
     if (($customRoute['path'] ?? '') !== $requestPathWithSlash) {

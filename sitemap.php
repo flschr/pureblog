@@ -17,6 +17,13 @@ echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
 // Homepage
 echo '<url><loc>' . e($baseUrl) . '/</loc><priority>1.0</priority></url>' . "\n";
 
+$socialConnection = social_connection();
+if (!empty($socialConnection['public_enabled'])) {
+    echo '<url><loc>' . e($baseUrl) . '/social</loc>';
+    if (!empty($socialConnection['last_sync_at'])) echo '<lastmod>' . date('Y-m-d', (int) $socialConnection['last_sync_at']) . '</lastmod>';
+    echo '<priority>0.7</priority></url>' . "\n";
+}
+
 // Published pages
 foreach (get_all_pages(false) as $page) {
     $slug = trim((string) ($page['slug'] ?? ''));

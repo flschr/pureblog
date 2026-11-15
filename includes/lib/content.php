@@ -1192,6 +1192,7 @@ function delete_post_by_slug(string $slug): bool
     $deleted = unlink($path);
     if ($deleted) {
         webmention_sender_content_deleted('post', $slug);
+        social_content_deleted($slug);
         $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
         if (is_dir($imageDir)) {
             $thumbDir = $imageDir . '/thumbs';
@@ -1333,6 +1334,9 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     if ($featureImage !== '') {
         $frontMatter['feature_image'] = $featureImage;
     }
+    if (!empty($post['social_announce'])) {
+        $frontMatter['social_announce'] = 'true';
+    }
 
     foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_syndication'] as $fieldName) {
         if (isset($post[$fieldName]) && trim((string) $post[$fieldName]) !== '') {
@@ -1396,6 +1400,7 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
         }
     }
     webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
+    social_content_saved($post, $originalSlug, $originalStatus);
     return true;
 }
 

@@ -14,10 +14,10 @@ try {
         micropub_require_token();
         $query = (string) ($_GET['q'] ?? '');
         if ($query === 'config') {
-            micropub_send_json(['media-endpoint' => micropub_media_endpoint_url(), 'syndicate-to' => []]);
+            micropub_send_json(['media-endpoint' => micropub_media_endpoint_url(), 'syndicate-to' => social_syndication_targets()]);
         }
         if ($query === 'syndicate-to') {
-            micropub_send_json(['syndicate-to' => []]);
+            micropub_send_json(['syndicate-to' => social_syndication_targets()]);
         }
         if ($query === 'source') {
             micropub_require_token('update');

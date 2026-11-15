@@ -56,6 +56,9 @@ return [
         'in_reply_to'           => 'In reply to',
         'like_of'               => 'Liked',
         'repost_of'             => 'Reposted',
+        'social_title'          => 'Microblog',
+        'social_description'    => 'Short posts archived from the connected social account.',
+        'social_empty'          => 'No archived social posts yet.',
     ],
 
     // -------------------------------------------------------------------------
@@ -235,6 +238,7 @@ return [
             'status_draft'          => 'Draft',
             'status_scheduled'      => 'Scheduled',
             'status_published'      => 'Published',
+            'social_announce'       => 'Announce this post on the connected social account',
             'images_title'          => 'Images',
             'no_images'             => 'No images yet.',
             'attached_images'       => 'Attached images:',
@@ -414,6 +418,7 @@ return [
                 'theme'   => 'Design',
                 'css'     => 'CSS',
                 'plugins' => 'Plugins',
+                'social'  => 'Social',
                 'user'    => 'User',
                 'updates' => 'Updates',
                 'save'    => 'Save settings',
@@ -670,6 +675,26 @@ return [
                         'api_key' => 'API key', 'model' => 'Model', 'language' => 'Output language',
                     ],
                 ],
+            ],
+
+            'social' => [
+                'page_title' => 'Social connector - Pure Blog Plus',
+                'heading' => 'Social connector',
+                'intro' => 'Optionally connect one Mastodon-compatible account. Pure Blog and the social server remain independently usable.',
+                'instance' => 'Server URL',
+                'connect' => 'Authorize account',
+                'account' => 'Connected account',
+                'connected' => 'Social account connected. The first synchronization has been queued.',
+                'disconnected' => 'Social account disconnected. Archived posts remain unchanged.',
+                'frozen' => 'The archive for @{account} is frozen. Reconnect to resume synchronization.',
+                'public_enabled' => 'Show the archived microblog at /social',
+                'public_tip' => 'Only public and unlisted original posts are copied. Replies, boosts, and blog announcements are excluded.',
+                'saved' => 'Social settings saved.',
+                'sync' => 'Synchronize now',
+                'sync_queued' => 'Synchronization queued.',
+                'last_sync' => 'Last synchronized: {date}',
+                'disconnect' => 'Disconnect account',
+                'disconnect_confirm' => 'Disconnect this account? The local archive will be kept.',
             ],
 
             'updates' => [

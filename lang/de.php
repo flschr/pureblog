@@ -62,6 +62,9 @@ return [
         'in_reply_to'           => 'Antwort auf',
         'like_of'               => 'Gefällt mir',
         'repost_of'             => 'Geteilt',
+        'social_title'          => 'Microblog',
+        'social_description'    => 'Kurze Beiträge aus dem verbundenen Social-Media-Konto.',
+        'social_empty'          => 'Noch keine Social-Media-Beiträge archiviert.',
     ],
 
 
@@ -247,6 +250,7 @@ return [
             'status_draft'          => 'Entwurf',
             'status_scheduled'      => 'Geplant',
             'status_published'      => 'Veröffentlicht',
+            'social_announce'       => 'Diesen Beitrag im verbundenen Social-Media-Konto ankündigen',
             'images_title'          => 'Bilder',
             'no_images'             => 'Noch keine Bilder.',
             'attached_images'       => 'Angehängte Bilder:',
@@ -424,6 +428,7 @@ return [
                 'theme'   => 'Design', // ENGLISH PLACEHOLDER
                 'css'     => 'CSS',
                 'plugins' => 'Plugins',
+                'social'  => 'Social',
                 'user'    => 'Benutzer',
                 'updates' => 'Updates',
                 'save'    => 'Einstellungen speichern',
@@ -682,6 +687,26 @@ return [
                         'api_key' => 'API-Schlüssel', 'model' => 'Modell', 'language' => 'Ausgabesprache',
                     ],
                 ],
+            ],
+
+            'social' => [
+                'page_title' => 'Social-Connector – Pure Blog Plus',
+                'heading' => 'Social-Connector',
+                'intro' => 'Verbinde optional ein Mastodon-kompatibles Konto. Pure Blog und der Social-Media-Server bleiben unabhängig nutzbar.',
+                'instance' => 'Server-URL',
+                'connect' => 'Konto autorisieren',
+                'account' => 'Verbundenes Konto',
+                'connected' => 'Social-Media-Konto verbunden. Die erste Synchronisierung wurde eingeplant.',
+                'disconnected' => 'Social-Media-Konto getrennt. Archivierte Beiträge bleiben unverändert erhalten.',
+                'frozen' => 'Das Archiv für @{account} ist eingefroren. Verbinde das Konto erneut, um die Synchronisierung fortzusetzen.',
+                'public_enabled' => 'Das archivierte Microblog unter /social anzeigen',
+                'public_tip' => 'Nur öffentliche und ungelistete eigene Beiträge werden kopiert. Antworten, Boosts und Blog-Ankündigungen bleiben außen vor.',
+                'saved' => 'Social-Einstellungen gespeichert.',
+                'sync' => 'Jetzt synchronisieren',
+                'sync_queued' => 'Synchronisierung eingeplant.',
+                'last_sync' => 'Zuletzt synchronisiert: {date}',
+                'disconnect' => 'Konto trennen',
+                'disconnect_confirm' => 'Dieses Konto trennen? Das lokale Archiv bleibt erhalten.',
             ],
 
             'updates' => [
