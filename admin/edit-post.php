@@ -26,6 +26,7 @@ $post = [
     'tags' => [],
     'description' => '',
     'content' => '',
+    'social_announce' => false,
 ];
 
 $originalSlug = '';
@@ -43,6 +44,7 @@ if ($isEditing) {
             'content'       => $existing['content'] ?? '',
             'layout'        => $existing['layout'] ?? '',
             'feature_image' => $existing['feature_image'] ?? '',
+            'social_announce' => !empty($existing['social_announce']),
         ];
         $originalSlug = $existing['slug'] ?? '';
         $originalExisting = $existing;
@@ -86,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id'])) 
     $post['description'] = trim($_POST['description'] ?? '');
     $post['layout']        = trim($_POST['post_layout'] ?? '');
     $post['feature_image'] = trim($_POST['feature_image'] ?? '');
+    $post['social_announce'] = isset($_POST['social_announce']);
     $tagsInput = trim($_POST['tags'] ?? '');
     $post['tags'] = $tagsInput === '' ? [] : array_values(array_filter(array_map('trim', explode(',', $tagsInput))));
     $originalSlug = trim($_POST['original_slug'] ?? '');
@@ -366,6 +369,10 @@ require __DIR__ . '/../includes/admin-head.php';
                             <option value="scheduled" <?= $post['status'] === 'scheduled' ? 'selected' : '' ?>><?= e(t('admin.editor.status_scheduled')) ?></option>
                             <option value="published" <?= $post['status'] === 'published' ? 'selected' : '' ?>><?= e(t('admin.editor.status_published')) ?></option>
                         </select>
+
+                        <?php if (social_connected() || !empty($post['social_announce'])): ?>
+                            <label><input type="checkbox" name="social_announce" value="1" form="editor-form"<?= !empty($post['social_announce']) ? ' checked' : '' ?>> <?= e(t('admin.editor.social_announce')) ?></label>
+                        <?php endif; ?>
 
                         <label for="tag-entry"><?= e(t('admin.post_editor.tags_label')) ?></label>
                         <div class="tag-input-wrap">

@@ -197,6 +197,7 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
         $reserved = array_fill_keys([
             'title', 'slug', 'date', 'timestamp', 'status', 'tags', 'description', 'content', 'path',
             'layout', 'feature_image', 'categories', 'micropub_kind', 'micropub_content_format',
+            'social_announce',
             'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to',
             'micropub_like_of', 'micropub_repost_of', 'micropub_syndication',
         ], true);
@@ -204,6 +205,14 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
             if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
                 $post['layout_fields'][$fieldName] = (string) $fieldValue;
             }
+        }
+        $post['social_announce'] = !empty($existing['social_announce']);
+    }
+    $requestedSyndication = $commands['mp-syndicate-to'] ?? [];
+    $requestedSyndication = is_array($requestedSyndication) ? $requestedSyndication : [$requestedSyndication];
+    foreach (social_syndication_targets() as $target) {
+        if (in_array((string) $target['uid'], $requestedSyndication, true)) {
+            $post['social_announce'] = true;
         }
     }
     if ($post['slug'] === '') {

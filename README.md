@@ -23,6 +23,9 @@ private admin inbox without an external Webmention service. Public comments and 
 remain the responsibility of an optional PureComments integration.
 The [bundled plugin contract](docs/plugins.md) keeps local media as the standalone default
 and lets an owner explicitly select optional storage and alt-text providers.
+The optional [social connector](docs/social-connector.md) connects one Mastodon-compatible
+account through OAuth, keeps a local read-only microblog projection, and can announce selected
+blog posts without making either product depend on the other.
 
 ## Pure Blog foundation
 

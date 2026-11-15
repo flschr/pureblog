@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Managed images now retain an editable default description. Empty Markdown, HTML, and Micropub photo alt text receives that description automatically, while any client- or author-supplied alt text remains unchanged. Existing media URLs, posts, and plugin settings are unchanged."
+    "instructions": "An optional one-account Mastodon-compatible connector can now maintain a local microblog projection and announce selected blog posts. It remains disabled until authorized under Settings → Social. Existing content, media, and standalone behavior are unchanged."
 }
