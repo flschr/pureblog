@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "..."
+    "instructions": "Pure Blog Plus now uses one media pipeline for admin and Micropub uploads. Local storage remains the default. Review the new Plugins settings page before selecting an optional S3-compatible storage or alt-text provider. Existing media URLs are unchanged."
 }

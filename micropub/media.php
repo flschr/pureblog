@@ -18,46 +18,12 @@ try {
     if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         throw new MicropubProtocolException('invalid_request', 'A complete file upload is required.');
     }
-    $temporary = (string) ($file['tmp_name'] ?? '');
-    $actualSize = is_uploaded_file($temporary) ? filesize($temporary) : false;
-    if ($actualSize === false || $actualSize <= 0 || $actualSize > 104857600) {
-        throw new MicropubProtocolException('invalid_request', 'The file is empty or exceeds 100 MB.');
-    }
-    $types = [
-        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif',
-        'image/webp' => 'webp', 'image/avif' => 'avif',
-        'audio/mpeg' => 'mp3', 'audio/mp4' => 'm4a', 'audio/ogg' => 'ogg',
-        'audio/wav' => 'wav', 'audio/x-wav' => 'wav', 'audio/flac' => 'flac',
-        'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/quicktime' => 'mov',
-    ];
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporary) ?: '';
-    if (!isset($types[$mime])) {
-        throw new MicropubProtocolException('invalid_request', 'The file type is not supported.');
-    }
-    $relativeDirectory = 'content/media/' . gmdate('Y/m');
-    $mediaRoot = PUREBLOG_BASE_PATH . '/content/media';
-    $directory = PUREBLOG_BASE_PATH . '/' . $relativeDirectory;
-    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
-        throw new RuntimeException('Unable to create the media directory.');
-    }
-    $realRoot = realpath($mediaRoot);
-    $realDirectory = realpath($directory);
-    if ($realRoot === false || $realDirectory === false || !str_starts_with($realDirectory . '/', $realRoot . '/')) {
-        throw new RuntimeException('The media directory is outside the local media root.');
-    }
-    $filename = bin2hex(random_bytes(16)) . '.' . $types[$mime];
-    $destination = $directory . '/' . $filename;
-    if (!move_uploaded_file($temporary, $destination)) {
-        throw new RuntimeException('Unable to store the uploaded file.');
-    }
-    if (str_starts_with($mime, 'image/')) {
-        strip_image_metadata($destination, $mime);
-        call_hook('on_image_uploaded', [$destination]);
-    }
-    @chmod($destination, 0644);
+    $media = plus_store_uploaded_media($file);
     http_response_code(201);
-    header('Location: ' . indieauth_base_url() . '/' . $relativeDirectory . '/' . $filename);
+    header('Location: ' . $media['url']);
     exit;
+} catch (InvalidArgumentException $error) {
+    micropub_send_json(['error' => 'invalid_request', 'error_description' => $error->getMessage()], 400);
 } catch (MicropubProtocolException $error) {
     micropub_send_error($error);
 } catch (Throwable) {

@@ -14,6 +14,27 @@
   const tagsField = document.getElementById('tags');
   const previewButton = document.getElementById('preview-button');
 
+  async function applyAltSuggestion(markdown, insertionStart) {
+    if (!config.altSuggestions) return;
+    const match = /^!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)$/u.exec(markdown.trim());
+    if (!match) return;
+    const form = new FormData();
+    form.set('csrf_token', config.csrfToken || '');
+    form.set('url', match[2]);
+    form.set('context', `${titleField?.value || ''}\n${contentField.value.slice(0, 2500)}`);
+    try {
+      const response = await fetch((config.basePath || '') + '/admin/media-alt-text.php', { method: 'POST', body: form });
+      const value = await response.json();
+      if (!response.ok || typeof value.alt !== 'string' || value.alt.trim() === '') return;
+      const escaped = value.alt.trim().replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]').replace(/[\r\n]+/g, ' ');
+      if (!Number.isInteger(insertionStart)
+        || contentField.value.slice(insertionStart, insertionStart + markdown.length) !== markdown) return;
+      contentField.setRangeText(`![${escaped}](${match[2]})`, insertionStart, insertionStart + markdown.length, 'preserve');
+      contentField.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (_) {
+    }
+  }
+
   const uploadForm = document.querySelector('.upload-form');
   const uploadInput = uploadForm?.querySelector('input[type="file"]');
   const uploadButton = uploadForm?.querySelector('button[type="submit"]');
@@ -25,6 +46,15 @@
   contentField.addEventListener('input', () => {
     scheduleAutosave();
   });
+
+  const uploadedOnLoad = new URL(window.location.href).searchParams.get('uploaded');
+  if (uploadedOnLoad && !contentField.value.includes(uploadedOnLoad)) {
+    contentField.value = contentField.value.trimEnd() + (contentField.value.trim() === '' ? '' : '\n\n') + uploadedOnLoad;
+    contentField.dispatchEvent(new Event('input', { bubbles: true }));
+    uploadedOnLoad.split(/\n+/).forEach((markdown) => {
+      void applyAltSuggestion(markdown, contentField.value.lastIndexOf(markdown));
+    });
+  }
 
   // Handle Markdown shortcut keydown events for a textarea
   function attachMarkdownShortcuts(textarea) {
@@ -715,6 +745,7 @@
         formData.append('slug', slugValue);
         formData.append('editor_type', config.editorType);
         formData.append('filename', newFilename);
+        formData.append('url', checkbox.checked ? url : '');
         formData.append('csrf_token', config.csrfToken || '');
 
         const response = await fetch((config.basePath || '') + '/admin/set-feature-image.php', {
@@ -798,7 +829,9 @@
         if (!markdown) {
           throw new Error(redirectUrl.searchParams.get('upload_error') || config.strings.upload_failed || 'Upload failed');
         }
+        const insertionStart = contentField.selectionStart;
         insertTextAtCursor(contentField, markdown);
+        void applyAltSuggestion(markdown, insertionStart);
       } catch (error) {
         alert(error?.message || config.strings.upload_failed);
       }

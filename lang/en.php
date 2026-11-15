@@ -408,6 +408,7 @@ return [
                 'site'    => 'Site',
                 'theme'   => 'Design',
                 'css'     => 'CSS',
+                'plugins' => 'Plugins',
                 'user'    => 'User',
                 'updates' => 'Updates',
                 'save'    => 'Save settings',
@@ -629,6 +630,41 @@ return [
                 'section_admin'     => 'Admin CSS',
                 'placeholder_front' => 'Add some custom CSS to your website...',
                 'placeholder_admin' => 'Add some custom CSS to the Pure Blog CMS...',
+            ],
+
+            'plugins' => [
+                'page_title' => 'Plugins - Pure Blog Plus',
+                'heading' => 'Plugins',
+                'intro' => 'Choose the bundled providers this site uses. Local media remains available without an external service.',
+                'section_providers' => 'Active providers',
+                'storage_provider' => 'Media storage',
+                'alt_provider' => 'Alt-text suggestions',
+                'none' => 'None',
+                'enabled' => 'Enabled',
+                'required' => 'Required local fallback',
+                'notice_saved' => 'Plugin settings updated.',
+                'error_save' => 'Plugin settings could not be saved.',
+                'error_provider' => 'The selected provider is invalid or disabled.',
+                'error_required' => '{field} is required for {plugin}.',
+                'error_url' => '{field} must be a valid HTTPS URL.',
+                'secret_preserved' => 'Leave blank to keep the saved secret.',
+                'bundled' => [
+                    'local_media' => [
+                        'name' => 'Local media',
+                        'description' => 'Stores originals and responsive variants on this server.',
+                    ],
+                    's3_media' => [
+                        'name' => 'S3-compatible media',
+                        'description' => 'Stores media in an S3-compatible bucket and serves it from a configured public URL.',
+                        'endpoint' => 'S3 endpoint', 'region' => 'Region', 'bucket' => 'Bucket',
+                        'access_key' => 'Access key', 'secret_key' => 'Secret key', 'public_base_url' => 'Public media URL',
+                    ],
+                    'openai_alt' => [
+                        'name' => 'OpenAI alt-text suggestions',
+                        'description' => 'Creates editable alt-text suggestions. Images and editorial context are sent to the configured API.',
+                        'api_key' => 'API key', 'model' => 'Model', 'language' => 'Output language',
+                    ],
+                ],
             ],
 
             'updates' => [

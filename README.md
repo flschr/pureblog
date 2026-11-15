@@ -21,6 +21,8 @@ delete Markdown posts and to upload media without a hosted publishing service. T
 [Webmention support](docs/webmentions.md) sends reactions and verifies incoming ones in the
 private admin inbox without an external Webmention service. Public comments and reactions
 remain the responsibility of an optional PureComments integration.
+The [bundled plugin contract](docs/plugins.md) keeps local media as the standalone default
+and lets an owner explicitly select optional storage and alt-text providers.
 
 ## Pure Blog foundation
 
@@ -41,7 +43,7 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 - PHP 8.1 or newer
 - A standard web server (Apache or Nginx)
 - **Required PHP extensions:** `mbstring`, `xml`
-- **Recommended PHP extensions:** `curl`, `zip`
+- **Recommended PHP extensions:** `curl`, `zip`, and `gd` or `imagick` for responsive media variants
 - **Required for Plus protocols and connectors:** `pdo_sqlite`, `fileinfo`
 - **Required for cross-origin IndieAuth clients:** `curl`
 - Write access to `/config`, `/content`, and `/data`
@@ -57,7 +59,9 @@ All you need to run Pure Blog is a host that supports PHP (pretty much all of th
 4. Once your site is setup, visit `/admin` and login to your new blog.
 
 ## Content
-Posts live in `content/posts` and pages live in `content/pages`. When images are uploaded they are stored in `/content/images/[post/page-slug]`.
+Posts live in `content/posts` and pages live in `content/pages`. New admin and Micropub
+uploads share the selected media provider. The default stores public files under
+`content/media/YYYY/MM`; older `content/images/[post/page-slug]` URLs remain compatible.
 
 ## Notes
 - Pure Blog is intentionally minimal and designed for personal sites.

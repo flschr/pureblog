@@ -175,6 +175,13 @@ if ($post['slug'] !== '') {
         }
     }
 }
+foreach (plus_media_referenced_by((string) $post['content'], (string) ($post['feature_image'] ?? '')) as $media) {
+    $filename = basename((string) ($media['original_name'] ?: (parse_url((string) $media['url'], PHP_URL_PATH) ?? $media['id'])));
+    $images[] = [
+        'filename' => $filename, 'markdown' => '![' . pathinfo($filename, PATHINFO_FILENAME) . '](' . $media['url'] . ')',
+        'url' => (string) $media['url'], 'thumb_url' => (string) $media['url'], 'managed_media' => true,
+    ];
+}
 
 $allLayouts = get_layouts();
 $currentLayout = trim($post['layout'] ?? '');
@@ -399,7 +406,7 @@ require __DIR__ . '/../includes/admin-head.php';
                             </div>
                             <ul class="image-list">
                             <?php foreach ($images as $image):
-                                $imageRawPath = '/content/images/' . $post['slug'] . '/' . $image['filename'];
+                                $imageRawPath = $image['url'];
                                 $isFeature    = ($post['feature_image'] ?? '') === $imageRawPath;
                             ?>
                                 <li<?= $isFeature ? ' class="is-feature"' : '' ?>>
@@ -413,13 +420,13 @@ require __DIR__ . '/../includes/admin-head.php';
                                             <?= e(t('admin.editor.feature_image')) ?>
                                         </label>
                                         <button type="button" class="link-button copy-markdown" data-markdown="<?= e($image['markdown']) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg> <?= e(t('admin.editor.copy')) ?></button>
-                                        <form method="post" action="<?= base_path() ?>/admin/delete-image.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.post_editor.delete_image_confirm')) ?>');">
+                                        <?php if (empty($image['managed_media'])): ?><form method="post" action="<?= base_path() ?>/admin/delete-image.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.post_editor.delete_image_confirm')) ?>');">
                                             <input type="hidden" name="slug" value="<?= e($post['slug']) ?>">
                                             <input type="hidden" name="date" value="<?= e($post['date']) ?>">
                                             <input type="hidden" name="filename" value="<?= e($image['filename']) ?>">
                                             <?= csrf_field() ?>
                                             <button type="submit" class="link-button delete"><svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg> <?= e(t('admin.editor.delete')) ?></button>
-                                        </form>
+                                        </form><?php endif; ?>
                                     </div>
                                 </li>
                             <?php endforeach; ?>
@@ -436,6 +443,7 @@ require __DIR__ . '/../includes/admin-head.php';
             formId: 'editor-form',
             csrfToken: '<?= e(csrf_token()) ?>',
             basePath: '<?= e(base_path()) ?>',
+            altSuggestions: <?= plus_alt_suggestions_enabled($config) ? 'true' : 'false' ?>,
             autosave: <?= $autosaveData !== null ? json_encode($autosaveData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>,
             strings: <?= json_encode([
                 'autosaving'        => t('admin.editor.js_autosaving'),

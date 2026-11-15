@@ -11,7 +11,7 @@ The endpoint supports:
 - configuration and source queries
 - `replace`, `add`, and `delete` updates
 - post deletion
-- local image, audio, and video uploads through a Media Endpoint
+- image, audio, and video uploads through the same selected media provider as the admin editor
 
 Creating, updating, deleting, and uploading require the matching `create`, `update`,
 `delete`, or `media` scope. Tokens are accepted in the Authorization header and, for
@@ -23,9 +23,13 @@ relationships and media properties use reserved `micropub_*` front-matter keys s
 admin editor can preserve them. SQLite contains credentials and operational state, never a
 second copy of editorial content.
 
-Media Endpoint uploads are stored under `content/media/YYYY/MM` with random names. The
-server determines the actual MIME type, accepts a bounded set of image, audio, and video
-formats, rejects files above 100 MB, and never downloads media supplied by external URLs.
+Media Endpoint uploads use the bundled plugin contract. The standalone default stores them
+under `content/media/YYYY/MM` with random names. The server determines the actual MIME type,
+accepts a bounded set of image, audio, and video formats, rejects files above 100 MB, and
+never downloads media supplied by external URLs. Image sources are retained privately;
+when GD or Imagick is available the pipeline creates responsive WebP variants. The returned
+URL belongs to the selected provider, so an explicitly configured S3-compatible plugin can
+return a custom media-domain URL without changing Micropub behavior.
 
 Syndication targets are empty until an optional social connector is configured. Unknown
 post properties are ignored as required by Micropub rather than being written into front
@@ -37,6 +41,7 @@ Run the isolated mapping and authorization contract with:
 
 ```sh
 php tests/plus-micropub.php
+php tests/plus-plugins-media.php
 ```
 
 The test covers form and JSON parsing, reserved commands, articles, notes, source

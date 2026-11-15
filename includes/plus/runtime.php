@@ -6,6 +6,8 @@ require_once __DIR__ . '/capabilities.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/jobs.php';
 require_once __DIR__ . '/job-runner.php';
+require_once __DIR__ . '/plugins.php';
+require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/indieauth.php';
 require_once __DIR__ . '/micropub.php';
 require_once __DIR__ . '/webmentions.php';
