@@ -82,18 +82,16 @@ try {
     webmention_test_assert($verified['author_name'] === 'Example Author', 'Author name was not extracted.');
     webmention_test_assert($verified['author_url'] === 'https://social.example/person', 'Relative author URL was not resolved.');
 
-    webmention_test_assert(webmention_moderate($id, 'approved', 1020), 'Verified Webmention could not be approved.');
-    $rendered = render_webmentions('post', 'article');
-    webmention_test_assert(str_contains($rendered, 'Example Author'), 'Approved Webmention was not rendered.');
-    webmention_test_assert(str_contains($rendered, 'nofollow ugc noopener noreferrer'), 'Untrusted source link lacks safe relation attributes.');
-    webmention_test_assert(!str_contains($rendered, '<script>'), 'Webmention content was rendered as HTML.');
+    webmention_test_assert(webmention_review($id, 'rejected', 1020), 'Verified Webmention could not be ignored.');
+    webmention_test_assert(webmention_get($id)['status'] === 'rejected', 'Ignored Webmention was not retained in the inbox.');
 
     webmention_verify($id, static fn(string $url): array => $response, 1030);
-    webmention_test_assert(webmention_get($id)['status'] === 'approved', 'Reverification lost moderation state.');
+    webmention_test_assert(webmention_get($id)['status'] === 'rejected', 'Reverification lost review state.');
+    webmention_test_assert(webmention_review($id, 'verified', 1035), 'Ignored Webmention could not be restored.');
     $withoutLink = $response;
     $withoutLink['body'] = '<!doctype html><html><body>No link remains.</body></html>';
     webmention_verify($id, static fn(string $url): array => $withoutLink, 1040);
-    webmention_test_assert(webmention_get($id)['status'] === 'deleted', 'Removed approved Webmention was not marked deleted.');
+    webmention_test_assert(webmention_get($id)['status'] === 'deleted', 'Removed verified Webmention was not marked deleted.');
 
     $database->prepare(
         "INSERT INTO plus_webmentions (source_url,target_url,target_type,target_slug,status,received_at,updated_at) VALUES (?,?,?,?, 'pending',?,?)"
@@ -116,7 +114,7 @@ try {
         webmention_test_assert($error->httpStatus === 429, 'Rate limit returned the wrong status.');
     }
 
-    echo "PASS: Webmention verification, moderation, safe rendering, deletion, SSRF boundaries, jobs, and rate limits\n";
+    echo "PASS: Webmention verification, private inbox review, deletion, SSRF boundaries, jobs, and rate limits\n";
 } finally {
     webmention_test_remove_tree($root);
 }

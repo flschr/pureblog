@@ -101,7 +101,6 @@ $isAdminLoggedIn = is_admin_logged_in();
                         <?php endif; ?>
                     </section>
                 <?php endif; ?>
-                <?= render_webmentions('page', (string) ($page['slug'] ?? '')) ?>
                 <?php if ($isAdminLoggedIn): ?>
                 <a class="admin-edit-link" href="<?= e(base_path() . '/admin/edit-page.php?slug=' . urlencode((string) ($page['slug'] ?? ''))) ?>">
                     <svg class="icon" aria-hidden="true"><use href="#icon-edit"></use></svg>

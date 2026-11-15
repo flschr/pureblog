@@ -10,12 +10,13 @@ before source verification. Verification runs through the local Plus job queue.
 
 Source requests are limited to public HTTP and HTTPS addresses, with DNS pinning, bounded
 redirects, time and response-size limits. A source is valid only while the fetched document
-contains the exact target URL. Previously approved mentions whose link disappears are
-removed from public display.
+contains the exact target URL. Previously verified mentions whose link disappears remain
+recorded with a deleted status.
 
-Verified mentions remain private until they are approved in **Admin → Webmentions**.
-Approved entries render as escaped text below their local post or page. Source links use
-`nofollow`, `ugc`, `noopener`, and `noreferrer`; remote HTML and images are never embedded.
+Verified mentions remain private and are collected in **Admin → Webmentions**. The inbox
+can ignore an entry or restore it for later use, but Pure Blog Plus never renders incoming
+Webmentions on public posts or pages. Public comments and reactions belong to an optional
+PureComments integration, which is not part of this receiver.
 
 This component receives Webmentions only. Sending Webmentions for links published by the
 blog is a separate capability so both directions remain independently testable.
@@ -28,5 +29,5 @@ Run the isolated receiver contract with:
 php tests/plus-webmentions.php
 ```
 
-The test covers lazy storage, URL and private-network rejection, verification, moderation,
-safe rendering, link removal, idempotent jobs, and request rate limits.
+The test covers lazy storage, URL and private-network rejection, verification, private inbox
+review, link removal, idempotent jobs, and request rate limits.

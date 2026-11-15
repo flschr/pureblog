@@ -15,9 +15,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = (string) ($_POST['webmention_action'] ?? '');
     if ($id < 1) {
         $error = t('admin.webmentions.invalid');
-    } elseif (in_array($action, ['approved', 'rejected'], true)) {
-        if (webmention_moderate($id, $action)) {
-            $notice = $action === 'approved' ? t('admin.webmentions.approved') : t('admin.webmentions.rejected');
+    } elseif (in_array($action, ['verified', 'rejected'], true)) {
+        if (webmention_review($id, $action)) {
+            $notice = $action === 'verified' ? t('admin.webmentions.restored') : t('admin.webmentions.rejected');
         } else {
             $error = t('admin.webmentions.invalid');
         }
@@ -30,7 +30,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $filter = (string) ($_GET['status'] ?? '');
-$allowedFilters = ['pending', 'verified', 'approved', 'rejected', 'invalid', 'deleted'];
+$allowedFilters = ['pending', 'verified', 'rejected', 'invalid', 'deleted'];
 $mentions = webmention_list(in_array($filter, $allowedFilters, true) ? $filter : null);
 $adminTitle = t('admin.webmentions.page_title');
 require __DIR__ . '/../includes/admin-head.php';
@@ -55,9 +55,10 @@ require __DIR__ . '/../includes/admin-head.php';
                 <form method="post" class="inline-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="webmention_id" value="<?= (int) $mention['id'] ?>">
-                    <?php if (in_array((string) $mention['status'], ['verified', 'approved', 'rejected'], true)): ?>
-                        <button type="submit" name="webmention_action" value="approved"><?= e(t('admin.webmentions.approve')) ?></button>
+                    <?php if ((string) $mention['status'] === 'verified'): ?>
                         <button class="delete" type="submit" name="webmention_action" value="rejected"><?= e(t('admin.webmentions.reject')) ?></button>
+                    <?php elseif ((string) $mention['status'] === 'rejected'): ?>
+                        <button type="submit" name="webmention_action" value="verified"><?= e(t('admin.webmentions.restore')) ?></button>
                     <?php endif; ?>
                     <button type="submit" name="webmention_action" value="verify"><?= e(t('admin.webmentions.verify')) ?></button>
                 </form>
