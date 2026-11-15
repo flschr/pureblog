@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "The editor now passes HEIC and HEIF selections and drops to the validated media-preparation hook when an installation provides one. Installations without such an adapter continue to reject unsupported formats safely."
+    "instructions": "Responsive WebP generation now supplies explicit dimensions for compatibility with Imagick builds that reject zero-height thumbnails. Existing media and provider settings are unchanged."
 }

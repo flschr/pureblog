@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.6",
+    "version": "3.9.2-plus.7",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
@@ -11,7 +11,7 @@
         "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/plugins.php": "58ce3d883a79ea2156fc41e8ac4583791c66664532166a7ee0fd64ae5ab5b3dc",
-        "includes/plus/media.php": "38e672e7e9d0472d6caaa622f77b1a8830098551a989347997fe034eb0ba9261",
+        "includes/plus/media.php": "70fe89894ae6af1f16a7ee6aac25323d3128d2f8f906e6bb166e2141678ccbea",
         "includes/plugins/local-media.php": "b61ded39c32383a772f55e5f2c31f1f6b82f4f20c3053763aec97bfcb9cd7e47",
         "includes/plugins/s3-media.php": "0e6d1b691e5f2b7b38d42485ec070d26bae44e6b063871b61af3cccfa491e9e7",
         "includes/plugins/openai-alt-text.php": "1bdb02068e02637a7de59da69987ff0fda8affaf93370bfb03c192b00e4f83d4",
