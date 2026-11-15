@@ -118,7 +118,14 @@ try {
     social_test_assert(count(social_statuses()) === 1, 'Disconnect removed the frozen projection.');
     social_test_assert(social_sync(1500) === 0 && count($requests) === $requestCount, 'Disconnected archive continued polling.');
 
-    echo "PASS: social OAuth state, one-account connection, polling, media isolation, projection updates, announcement deletion and frozen disconnect\n";
+    $reconnectAuthorization = social_begin_connection('https://example.social', 1600);
+    parse_str((string) parse_url($reconnectAuthorization, PHP_URL_QUERY), $reconnectQuery);
+    $reconnected = social_complete_connection('reconnect-code', (string) ($reconnectQuery['state'] ?? ''), 1601);
+    social_test_assert(social_connected($reconnected), 'Reconnect did not restore an active account.');
+    social_test_assert(count(social_statuses()) === 1, 'Reconnect removed the frozen projection.');
+    social_test_assert(social_sync(1602) === 1, 'Reconnected account did not resume polling.');
+
+    echo "PASS: social OAuth state, one-account connection, polling, media isolation, projection updates, announcement deletion, frozen disconnect and reconnect\n";
 } finally {
     unset($GLOBALS['_pureblog_social_public_ips'], $GLOBALS['_pureblog_social_media_archiver'], $GLOBALS['_pureblog_social_requester']);
     social_test_remove_tree($root);
