@@ -4,15 +4,16 @@ Pure Blog Plus is a maintained fork of [Pure Blog](https://github.com/kevquirk/p
 created by [Kev Quirk](https://kevquirk.com). It keeps Pure Blog's small,
 Markdown-first foundation and develops optional personal-publishing features around it.
 
-The current `main` branch is behaviorally identical to Pure Blog 3.9.2. The first Plus
-release is being designed around local-first IndieWeb publishing and an optional,
+The current Plus line is based on Pure Blog 3.9.2. The first Plus release is being
+designed around local-first IndieWeb publishing and an optional,
 loosely-coupled connection to GoToSocial Plus. Pure Blog Plus remains useful on its own;
 connecting another service is never required.
 
 See [the Plus architecture](docs/plus-architecture.md) for the agreed product boundaries
 and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blog. The
 [Plus runtime](docs/plus-runtime.md) documents lazy SQLite migrations, capabilities, and
-the local background-job queue used by optional protocols and connectors.
+the local background-job queue used by optional protocols and connectors. The
+[release contract](docs/releases.md) describes versioning, package validation, and updates.
 
 ## Pure Blog foundation
 

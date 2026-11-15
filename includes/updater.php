@@ -2,6 +2,192 @@
 
 declare(strict_types=1);
 
+const PUREBLOG_PLUS_RELEASES_API = 'https://api.github.com/repos/flschr/pureblog/releases';
+const PUREBLOG_PLUS_RELEASES_URL = 'https://github.com/flschr/pureblog/releases';
+const PUREBLOG_UPSTREAM_RELEASE_API = 'https://api.github.com/repos/kevquirk/pureblog/releases/latest';
+const PUREBLOG_UPSTREAM_RELEASES_URL = 'https://github.com/kevquirk/pureblog/releases';
+const PUREBLOG_PLUS_RELEASE_MANIFEST = 'plus-release.json';
+const PUREBLOG_PLUS_LICENSE_SHA256 = '68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78';
+
+/**
+ * @return array{version:string,upstream:string,upstream_parts:list<int>,release:int,stage:?string,stage_number:?int}|null
+ */
+function parse_pureblog_plus_version(string $version): ?array
+{
+    $value = trim($version);
+    if (preg_match('/^v?(\d+)\.(\d+)\.(\d+)-plus\.(\d+)(?:-(alpha|beta|rc)\.(\d+))?$/i', $value, $matches) !== 1) {
+        return null;
+    }
+
+    $upstreamParts = [(int) $matches[1], (int) $matches[2], (int) $matches[3]];
+    $stage = isset($matches[5]) && $matches[5] !== '' ? strtolower($matches[5]) : null;
+    $stageNumber = isset($matches[6]) && $matches[6] !== '' ? (int) $matches[6] : null;
+    if (($stage === null) !== ($stageNumber === null)) {
+        return null;
+    }
+
+    $normalized = implode('.', $upstreamParts) . '-plus.' . (int) $matches[4];
+    if ($stage !== null) {
+        $normalized .= '-' . $stage . '.' . $stageNumber;
+    }
+
+    return [
+        'version' => $normalized,
+        'upstream' => implode('.', $upstreamParts),
+        'upstream_parts' => $upstreamParts,
+        'release' => (int) $matches[4],
+        'stage' => $stage,
+        'stage_number' => $stageNumber,
+    ];
+}
+
+function compare_pureblog_plus_versions(string $left, string $right): int
+{
+    $a = parse_pureblog_plus_version($left);
+    $b = parse_pureblog_plus_version($right);
+    if ($a === null || $b === null) {
+        throw new InvalidArgumentException('Invalid Pure Blog Plus version.');
+    }
+
+    foreach ([0, 1, 2] as $index) {
+        $comparison = $a['upstream_parts'][$index] <=> $b['upstream_parts'][$index];
+        if ($comparison !== 0) {
+            return $comparison;
+        }
+    }
+    $comparison = $a['release'] <=> $b['release'];
+    if ($comparison !== 0) {
+        return $comparison;
+    }
+    if ($a['stage'] === null || $b['stage'] === null) {
+        return $a['stage'] === $b['stage'] ? 0 : ($a['stage'] === null ? 1 : -1);
+    }
+
+    $stageOrder = ['alpha' => 0, 'beta' => 1, 'rc' => 2];
+    $comparison = $stageOrder[$a['stage']] <=> $stageOrder[$b['stage']];
+    return $comparison !== 0 ? $comparison : ($a['stage_number'] <=> $b['stage_number']);
+}
+
+function pureblog_plus_update_available(string $current, string $latest): bool
+{
+    if (parse_pureblog_plus_version($current) === null || parse_pureblog_plus_version($latest) === null) {
+        return false;
+    }
+    return compare_pureblog_plus_versions($current, $latest) < 0;
+}
+
+function pureblog_plus_release_download_url_is_allowed(string $url): bool
+{
+    $parts = parse_url($url);
+    if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || ($parts['host'] ?? '') !== 'api.github.com') {
+        return false;
+    }
+    $path = (string) ($parts['path'] ?? '');
+    return preg_match('#^/repos/flschr/pureblog/(?:zipball|tarball)/[^/]+$#', $path) === 1;
+}
+
+/**
+ * @return list<string>
+ */
+function pureblog_plus_protected_release_files(): array
+{
+    return [
+        'LICENSE.md',
+        'includes/plus/runtime.php',
+        'includes/plus/migrations.php',
+        'includes/plus/jobs.php',
+        'includes/plus/job-runner.php',
+        'includes/plus/capabilities.php',
+    ];
+}
+
+/**
+ * @return array{schema:int,product:string,version:string,upstream:string,protected_files:array<string,string>}
+ */
+function build_pureblog_plus_release_manifest(string $sourceRoot, string $version): array
+{
+    $parsed = parse_pureblog_plus_version($version);
+    if ($parsed === null) {
+        throw new InvalidArgumentException('Invalid Pure Blog Plus version.');
+    }
+    $checksums = [];
+    foreach (pureblog_plus_protected_release_files() as $relative) {
+        $checksum = @hash_file('sha256', $sourceRoot . '/' . $relative);
+        if (!is_string($checksum)) {
+            throw new RuntimeException('Missing protected release file: ' . $relative);
+        }
+        $checksums[$relative] = $checksum;
+    }
+    return [
+        'schema' => 1,
+        'product' => 'pureblog-plus',
+        'version' => $parsed['version'],
+        'upstream' => $parsed['upstream'],
+        'protected_files' => $checksums,
+    ];
+}
+
+/**
+ * @return array{ok:bool,error?:string,manifest?:array<string,mixed>}
+ */
+function validate_pureblog_plus_package(string $sourceRoot, string $releaseTag): array
+{
+    $release = parse_pureblog_plus_version($releaseTag);
+    if ($release === null || $release['release'] < 1) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_version')];
+    }
+
+    $requiredPaths = [
+        'LICENSE.md',
+        'VERSION',
+        'functions.php',
+        'admin',
+        'includes/plus/runtime.php',
+        'includes/plus/migrations.php',
+        'includes/plus/jobs.php',
+        'includes/plus/job-runner.php',
+        'includes/plus/capabilities.php',
+        PUREBLOG_PLUS_RELEASE_MANIFEST,
+    ];
+    foreach ($requiredPaths as $relative) {
+        if (!file_exists($sourceRoot . '/' . $relative)) {
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_package_path', ['path' => $relative])];
+        }
+    }
+
+    $manifestRaw = @file_get_contents($sourceRoot . '/' . PUREBLOG_PLUS_RELEASE_MANIFEST);
+    $manifest = is_string($manifestRaw) ? json_decode($manifestRaw, true) : null;
+    if (!is_array($manifest)
+        || ($manifest['schema'] ?? null) !== 1
+        || ($manifest['product'] ?? null) !== 'pureblog-plus'
+        || !is_array($manifest['protected_files'] ?? null)) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_manifest')];
+    }
+
+    $manifestVersion = parse_pureblog_plus_version((string) ($manifest['version'] ?? ''));
+    $versionFile = parse_pureblog_plus_version((string) @file_get_contents($sourceRoot . '/VERSION'));
+    if ($manifestVersion === null
+        || $versionFile === null
+        || $manifestVersion['version'] !== $release['version']
+        || $versionFile['version'] !== $release['version']
+        || (string) ($manifest['upstream'] ?? '') !== $release['upstream']) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_identity')];
+    }
+
+    foreach (pureblog_plus_protected_release_files() as $relative) {
+        $expected = strtolower((string) ($manifest['protected_files'][$relative] ?? ''));
+        $actual = @hash_file('sha256', $sourceRoot . '/' . $relative);
+        if (preg_match('/^[a-f0-9]{64}$/', $expected) !== 1 || !is_string($actual) || !hash_equals($expected, $actual)) {
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_checksum', ['path' => $relative])];
+        }
+    }
+    if (!hash_equals(PUREBLOG_PLUS_LICENSE_SHA256, (string) hash_file('sha256', $sourceRoot . '/LICENSE.md'))) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_license')];
+    }
+
+    return ['ok' => true, 'manifest' => $manifest];
+}
+
 /**
  * @return list<string>
  */
@@ -194,14 +380,50 @@ function remove_non_preserved_htaccess(array $preservedFiles): void
     }
 }
 
+function pureblog_release_archive_is_safe(ZipArchive $zip): bool
+{
+    if ($zip->numFiles < 1 || $zip->numFiles > 10000) {
+        return false;
+    }
+    $totalSize = 0;
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $name = $zip->getNameIndex($index);
+        if (!is_string($name)) {
+            return false;
+        }
+        $normalized = str_replace('\\', '/', $name);
+        if ($normalized === ''
+            || str_starts_with($normalized, '/')
+            || preg_match('/^[a-zA-Z]:\//', $normalized) === 1
+            || in_array('..', explode('/', $normalized), true)) {
+            return false;
+        }
+        $stat = $zip->statIndex($index);
+        $size = is_array($stat) ? (int) ($stat['size'] ?? 0) : 0;
+        $totalSize += max(0, $size);
+        if ($size > 64 * 1024 * 1024 || $totalSize > 256 * 1024 * 1024) {
+            return false;
+        }
+        if (method_exists($zip, 'getExternalAttributesIndex')) {
+            $operatingSystem = 0;
+            $attributes = 0;
+            if ($zip->getExternalAttributesIndex($index, $operatingSystem, $attributes)
+                && (($attributes >> 16) & 0170000) === 0120000) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 /**
  * Build a file-level, read-only plan from a downloaded release package.
  *
  * @return array{ok:bool,error?:string,counts?:array<string,int>,will_add?:list<string>,will_replace?:list<string>,unchanged?:list<string>,will_skip?:list<string>,local_only?:list<string>}
  */
-function build_package_upgrade_plan(string $zipballUrl): array
+function build_package_upgrade_plan(string $zipballUrl, string $releaseTag, ?callable $download = null): array
 {
-    if ($zipballUrl === '') {
+    if ($zipballUrl === '' || !pureblog_plus_release_download_url_is_allowed($zipballUrl)) {
         return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_url')];
     }
     if (!class_exists('ZipArchive')) {
@@ -214,7 +436,9 @@ function build_package_upgrade_plan(string $zipballUrl): array
     @mkdir($tmpExtract, 0700, true);
 
     try {
-        $downloadError = download_url_to_file($zipballUrl, $tmpZip);
+        $downloadError = $download !== null
+            ? $download($zipballUrl, $tmpZip)
+            : download_url_to_file($zipballUrl, $tmpZip);
         if ($downloadError !== null) {
             return ['ok' => false, 'error' => $downloadError];
         }
@@ -222,6 +446,10 @@ function build_package_upgrade_plan(string $zipballUrl): array
         $zip = new ZipArchive();
         if ($zip->open($tmpZip) !== true) {
             return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_open')];
+        }
+        if (!pureblog_release_archive_is_safe($zip)) {
+            $zip->close();
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_unsafe')];
         }
         if (!$zip->extractTo($tmpExtract)) {
             $zip->close();
@@ -238,6 +466,10 @@ function build_package_upgrade_plan(string $zipballUrl): array
         $sourceFiles = collect_relative_files($sourceRoot);
         if (!$sourceFiles) {
             return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_empty')];
+        }
+        $validation = validate_pureblog_plus_package($sourceRoot, $releaseTag);
+        if (!($validation['ok'] ?? false)) {
+            return $validation;
         }
 
         // Check for a breaking-upgrade notice bundled in the release zip.
@@ -432,8 +664,18 @@ function backup_core_paths(string $backupRoot, array $items): void
     }
 }
 
-function restore_core_paths_from_backup(string $backupRoot): void
+/**
+ * @param list<string> $replaceItems
+ */
+function restore_core_paths_from_backup(string $backupRoot, array $replaceItems = []): void
 {
+    foreach ($replaceItems as $item) {
+        $target = PUREBLOG_BASE_PATH . '/' . $item;
+        if (file_exists($target)) {
+            remove_directory_recursive($target);
+        }
+    }
+
     $items = scandir($backupRoot) ?: [];
     foreach ($items as $item) {
         if ($item === '.' || $item === '..') {
@@ -580,10 +822,18 @@ function delete_named_backup(string $backupName): array
     ];
 }
 
-function apply_release_update(string $zipballUrl, string $releaseTag = ''): array
+function apply_release_update(
+    string $zipballUrl,
+    string $releaseTag = '',
+    ?callable $download = null,
+    ?callable $copyPath = null
+): array
 {
-    if ($zipballUrl === '') {
+    if ($zipballUrl === '' || !pureblog_plus_release_download_url_is_allowed($zipballUrl)) {
         return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_url')];
+    }
+    if (parse_pureblog_plus_version($releaseTag) === null) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_plus_version')];
     }
     if (!class_exists('ZipArchive')) {
         return ['ok' => false, 'error' => t('admin.settings.updates.error_ziparchive')];
@@ -593,20 +843,21 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
     $tmpZip = $tmpBase . '.zip';
     $tmpExtract = $tmpBase . '-extract';
     $backupBase = PUREBLOG_BASE_PATH . '/backup';
-    if (!is_dir($backupBase) && !@mkdir($backupBase, 0755, true) && !is_dir($backupBase)) {
-        return ['ok' => false, 'error' => t('admin.settings.updates.error_backup_dir')];
-    }
     $versionRaw = detect_current_pureblog_version();
     $versionSlug = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $versionRaw);
     if (!is_string($versionSlug) || $versionSlug === '') {
         $versionSlug = 'unknown';
     }
     $tmpBackup = $backupBase . '/pureblog-backup-' . date('Ymd-His') . '-' . $versionSlug . '-' . bin2hex(random_bytes(4));
+    $mutationStarted = false;
+    $copyPath ??= 'copy_path_recursive';
+    $coreItems = [];
     @mkdir($tmpExtract, 0700, true);
-    @mkdir($tmpBackup, 0700, true);
 
     try {
-        $downloadError = download_url_to_file($zipballUrl, $tmpZip);
+        $downloadError = $download !== null
+            ? $download($zipballUrl, $tmpZip)
+            : download_url_to_file($zipballUrl, $tmpZip);
         if ($downloadError !== null) {
             return ['ok' => false, 'error' => $downloadError];
         }
@@ -614,6 +865,10 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
         $zip = new ZipArchive();
         if ($zip->open($tmpZip) !== true) {
             return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_open')];
+        }
+        if (!pureblog_release_archive_is_safe($zip)) {
+            $zip->close();
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_zip_unsafe')];
         }
         if (!$zip->extractTo($tmpExtract)) {
             $zip->close();
@@ -627,9 +882,16 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
             $sourceRoot = $tmpExtract . '/' . $entries[0];
         }
 
-        // Sanity check for expected project markers.
-        if (!is_file($sourceRoot . '/functions.php') || !is_dir($sourceRoot . '/admin')) {
-            return ['ok' => false, 'error' => t('admin.settings.updates.error_package_invalid')];
+        $validation = validate_pureblog_plus_package($sourceRoot, $releaseTag);
+        if (!($validation['ok'] ?? false)) {
+            return $validation;
+        }
+
+        if (!is_dir($backupBase) && !@mkdir($backupBase, 0755, true) && !is_dir($backupBase)) {
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_backup_dir')];
+        }
+        if (!@mkdir($tmpBackup, 0700, true) && !is_dir($tmpBackup)) {
+            return ['ok' => false, 'error' => t('admin.settings.updates.error_backup_dir')];
         }
 
         // Determine which top-level items the release zip will overwrite.
@@ -663,6 +925,7 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
 
         $preservedHtaccessFiles = collect_existing_htaccess_files();
         backup_core_paths($tmpBackup, $coreItems);
+        $mutationStarted = true;
 
         foreach ($coreItems as $item) {
             $source = $sourceRoot . '/' . $item;
@@ -671,7 +934,7 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
             if (file_exists($target)) {
                 remove_directory_recursive($target);
             }
-            copy_path_recursive($source, $target);
+            $copyPath($source, $target);
         }
 
         // Set /VERSION from the release tag (zipballs may omit /VERSION).
@@ -708,9 +971,18 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
             'backup_path' => $tmpBackup,
         ];
     } catch (Throwable $e) {
+        if (!$mutationStarted) {
+            if (is_dir($tmpBackup)) {
+                remove_directory_recursive($tmpBackup);
+            }
+            return [
+                'ok' => false,
+                'error' => t('admin.settings.updates.error_update_not_applied', ['error' => $e->getMessage()]),
+            ];
+        }
         try {
             if (is_dir($tmpBackup)) {
-                restore_core_paths_from_backup($tmpBackup);
+                restore_core_paths_from_backup($tmpBackup, $coreItems);
             }
         } catch (Throwable $restoreError) {
             return [
@@ -728,49 +1000,85 @@ function apply_release_update(string $zipballUrl, string $releaseTag = ''): arra
     }
 }
 
-function fetch_latest_pureblog_release(): array
+function fetch_latest_pureblog_release(?callable $httpGet = null, ?bool $includePrereleases = null): array
 {
     $config = function_exists('load_config') ? load_config() : [];
-    $isBeta = !empty($config['beta_updates']);
-
-    $fetchManifest = static function (string $url): array {
-        $result = pureblog_http_get(
-            $url,
-            5,
-            ['User-Agent: Pureblog-Updates-Check', 'Accept: application/json']
-        );
-        if (!$result['ok']) {
-            return ['ok' => false, 'error' => $result['error']];
-        }
-        $json = json_decode($result['body'], true);
-        if (!is_array($json)) {
-            return ['ok' => false, 'error' => t('admin.settings.updates.error_github_json')];
-        }
-        return [
-            'ok'           => true,
-            'tag'          => (string) ($json['tag_name'] ?? ''),
-            'name'         => (string) ($json['name'] ?? ''),
-            'url'          => (string) ($json['html_url'] ?? 'https://github.com/kevquirk/pureblog/releases'),
-            'zipball_url'  => (string) ($json['zipball_url'] ?? ''),
-            'published_at' => (string) ($json['published_at'] ?? ''),
-        ];
-    };
-
-    if ($isBeta) {
-        $beta = $fetchManifest('https://packages.purecommons.org/blog/beta.json');
-        if ($beta['ok'] && $beta['tag'] !== '') {
-            $latest = $fetchManifest('https://packages.purecommons.org/blog/latest.json');
-            if ($latest['ok'] && $latest['tag'] !== '') {
-                $normBeta = ltrim($beta['tag'], 'vV');
-                $normLatest = ltrim($latest['tag'], 'vV');
-                if (version_compare($normBeta, $normLatest, '>')) {
-                    return $beta;
-                }
-                return $latest;
-            }
-            return $beta;
-        }
+    $includePrereleases ??= !empty($config['beta_updates']);
+    $httpGet ??= 'pureblog_http_get';
+    $result = $httpGet(
+        PUREBLOG_PLUS_RELEASES_API . '?per_page=100',
+        5,
+        [
+            'User-Agent: PureBlog-Plus-Updates',
+            'Accept: application/vnd.github+json',
+            'X-GitHub-Api-Version: 2022-11-28',
+        ]
+    );
+    if (!is_array($result) || !($result['ok'] ?? false)) {
+        return ['ok' => false, 'error' => (string) ($result['error'] ?? t('admin.settings.updates.error_release_metadata'))];
     }
 
-    return $fetchManifest('https://packages.purecommons.org/blog/latest.json');
+    $json = json_decode((string) ($result['body'] ?? ''), true);
+    if (!is_array($json)) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_github_json')];
+    }
+
+    $releases = [];
+    foreach ($json as $release) {
+        if (!is_array($release) || !empty($release['draft'])) {
+            continue;
+        }
+        $tag = (string) ($release['tag_name'] ?? '');
+        $parsed = parse_pureblog_plus_version($tag);
+        $zipballUrl = (string) ($release['zipball_url'] ?? '');
+        $isPrerelease = !empty($release['prerelease']) || ($parsed['stage'] ?? null) !== null;
+        if ($parsed === null
+            || $parsed['release'] < 1
+            || (!$includePrereleases && $isPrerelease)
+            || !pureblog_plus_release_download_url_is_allowed($zipballUrl)) {
+            continue;
+        }
+        $releases[] = [
+            'ok' => true,
+            'tag' => $tag,
+            'name' => (string) ($release['name'] ?? ''),
+            'url' => (string) ($release['html_url'] ?? PUREBLOG_PLUS_RELEASES_URL),
+            'zipball_url' => $zipballUrl,
+            'published_at' => (string) ($release['published_at'] ?? ''),
+            'upstream' => $parsed['upstream'],
+            'prerelease' => $isPrerelease,
+        ];
+    }
+    if ($releases === []) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_no_plus_release')];
+    }
+    usort($releases, static fn(array $a, array $b): int => compare_pureblog_plus_versions($b['tag'], $a['tag']));
+    return $releases[0];
+}
+
+function fetch_latest_upstream_release(?callable $httpGet = null): array
+{
+    $httpGet ??= 'pureblog_http_get';
+    $result = $httpGet(
+        PUREBLOG_UPSTREAM_RELEASE_API,
+        5,
+        [
+            'User-Agent: PureBlog-Plus-Updates',
+            'Accept: application/vnd.github+json',
+            'X-GitHub-Api-Version: 2022-11-28',
+        ]
+    );
+    if (!is_array($result) || !($result['ok'] ?? false)) {
+        return ['ok' => false, 'error' => (string) ($result['error'] ?? t('admin.settings.updates.error_release_metadata'))];
+    }
+    $json = json_decode((string) ($result['body'] ?? ''), true);
+    if (!is_array($json) || preg_match('/^v?\d+\.\d+\.\d+$/', (string) ($json['tag_name'] ?? '')) !== 1) {
+        return ['ok' => false, 'error' => t('admin.settings.updates.error_github_json')];
+    }
+    return [
+        'ok' => true,
+        'tag' => (string) $json['tag_name'],
+        'url' => (string) ($json['html_url'] ?? PUREBLOG_UPSTREAM_RELEASES_URL),
+        'published_at' => (string) ($json['published_at'] ?? ''),
+    ];
 }
