@@ -149,6 +149,7 @@ try {
     updater_test_copy_tree(PUREBLOG_BASE_PATH, $successInstall);
     updater_test_copy_tree(PUREBLOG_BASE_PATH, $rollbackInstall);
     foreach ([$successInstall, $rollbackInstall] as $install) {
+        file_put_contents($install . '/VERSION', "3.9.2-plus.0\n");
         if (!is_dir($install . '/config')) {
             mkdir($install . '/config', 0700, true);
         }
