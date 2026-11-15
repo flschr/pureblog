@@ -134,6 +134,20 @@ return [
             'time_days_ago'        => 'Vor {n} Tagen',
         ],
 
+        'indieauth' => [
+            'page_title'          => 'Anwendung autorisieren – Pure Blog Plus',
+            'heading'             => 'Anwendung autorisieren',
+            'intro'               => '{client} möchte auf deine Website zugreifen.',
+            'client'              => 'Client',
+            'redirect'            => 'Rücksprungadresse',
+            'permissions'         => 'Berechtigungen',
+            'unsupported_scope'   => 'nicht unterstützt',
+            'sign_in_only'        => 'Diese Anfrage bestätigt nur deine Profil-URL und erstellt kein Zugriffstoken.',
+            'approve'             => 'Erlauben',
+            'deny'                => 'Ablehnen',
+            'error_scope_required'=> 'Wähle mindestens eine unterstützte Berechtigung oder lehne die Anfrage ab.',
+        ],
+
 
         'content' => [
             'page_title'            => 'Inhalte - Pure Blog',

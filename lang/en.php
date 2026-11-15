@@ -124,6 +124,20 @@ return [
             'time_days_ago'        => '{n} days ago',
         ],
 
+        'indieauth' => [
+            'page_title'          => 'Authorize application - Pure Blog Plus',
+            'heading'             => 'Authorize application',
+            'intro'               => '{client} wants to access your site.',
+            'client'              => 'Client',
+            'redirect'            => 'Return address',
+            'permissions'         => 'Permissions',
+            'unsupported_scope'   => 'not supported',
+            'sign_in_only'        => 'This request only confirms your profile URL and does not create an access token.',
+            'approve'             => 'Approve',
+            'deny'                => 'Deny',
+            'error_scope_required'=> 'Select at least one supported permission or deny the request.',
+        ],
+
         'content' => [
             'page_title'            => 'Content - Pure Blog',
             'tabs_label'            => 'Content tabs',

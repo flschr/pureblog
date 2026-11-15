@@ -13,6 +13,7 @@ $adminColorMode = $adminColorMode ?? ($config['theme']['admin_color_mode'] ?? 'a
 $extraHead = $extraHead ?? '';
 $codeMirror = $codeMirror ?? null; // 'markdown' or 'css'
 $hideAdminNav = $hideAdminNav ?? false;
+$allowExternalAdminAssets = $allowExternalAdminAssets ?? true;
 $adminCssVersion = (string) @filemtime(PUREBLOG_BASE_PATH . '/admin/css/admin.css');
 
 if (!$hideAdminNav && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['search_page_action'])) {
@@ -69,7 +70,7 @@ unset($_SESSION['admin_action_flash']);
     <link rel="apple-touch-icon" href="<?= e($adminFavicon) ?>">
     <title><?= e($adminTitle) ?></title>
     <?php $adminFontUrl = font_stack_url($config['theme']['admin_font_stack'] ?? 'sans'); ?>
-    <?php if ($adminFontUrl !== null): ?>
+    <?php if ($allowExternalAdminAssets && $adminFontUrl !== null): ?>
         <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
         <link rel="stylesheet" href="<?= e($adminFontUrl) ?>">
     <?php endif; ?>

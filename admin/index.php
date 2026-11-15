@@ -8,6 +8,10 @@ require_setup_redirect();
 
 start_admin_session();
 maybe_restore_admin_from_cookie();
+$isIndieAuthLogin = isset($_SESSION['indieauth_pending_request']);
+if ($isIndieAuthLogin) {
+    indieauth_send_interaction_headers();
+}
 
 $config = load_config();
 $fontStack = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
@@ -20,9 +24,7 @@ $lockoutUntil = $failureState['lockout_until'];
 $isLockedOut = $lockoutUntil > $now;
 
 if (is_admin_logged_in()) {
-    $blogPostsEnabled = $config['enable_blog_posts'] ?? true;
-    $adminLanding = (!$blogPostsEnabled || ($config['admin_homepage'] ?? 'dashboard') === 'content') ? 'content.php' : 'dashboard.php';
-    header('Location: ' . base_path() . '/admin/' . $adminLanding);
+    header('Location: ' . admin_login_destination($config));
     exit;
 }
 
@@ -72,9 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($rememberMe) {
                 set_remember_me_cookie();
             }
-            $blogPostsEnabled = $config['enable_blog_posts'] ?? true;
-            $adminLanding = (!$blogPostsEnabled || ($config['admin_homepage'] ?? 'dashboard') === 'content') ? 'content.php' : 'dashboard.php';
-            header('Location: ' . base_path() . '/admin/' . $adminLanding);
+            header('Location: ' . admin_login_destination($config));
             exit;
         }
 
@@ -108,9 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!empty($_POST['remember_me'])) {
                     set_remember_me_cookie();
                 }
-                $blogPostsEnabled = $config['enable_blog_posts'] ?? true;
-                $adminLanding = (!$blogPostsEnabled || ($config['admin_homepage'] ?? 'dashboard') === 'content') ? 'content.php' : 'dashboard.php';
-                header('Location: ' . base_path() . '/admin/' . $adminLanding);
+                header('Location: ' . admin_login_destination($config));
                 exit;
             }
         } else {
@@ -128,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $adminTitle = $isMfaPending ? t('admin.login.mfa_page_title') : t('admin.login.page_title');
 $hideAdminNav = true;
+$allowExternalAdminAssets = !$isIndieAuthLogin;
 require __DIR__ . '/../includes/admin-head.php';
 ?>
     <main class="narrow">

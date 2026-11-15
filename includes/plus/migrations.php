@@ -80,7 +80,7 @@ function plus_apply_migrations(PDO $database): void
     );
 
     foreach ($GLOBALS['_pureblog_plus_migrations'] as $id => $migration) {
-        $database->exec('BEGIN IMMEDIATE');
+        plus_begin_immediate($database);
         try {
             $query = $database->prepare('SELECT 1 FROM plus_migrations WHERE id = ?');
             $query->execute([$id]);
@@ -97,6 +97,22 @@ function plus_apply_migrations(PDO $database): void
                 $database->exec('ROLLBACK');
             }
             throw $error;
+        }
+    }
+}
+
+function plus_begin_immediate(PDO $database): void
+{
+    for ($attempt = 0; ; $attempt++) {
+        try {
+            $database->exec('BEGIN IMMEDIATE');
+            return;
+        } catch (PDOException $error) {
+            $isLocked = str_contains(strtolower($error->getMessage()), 'database is locked');
+            if (!$isLocked || $attempt >= 9) {
+                throw $error;
+            }
+            usleep(50000 * ($attempt + 1));
         }
     }
 }

@@ -55,6 +55,9 @@ if ($featureImageRaw !== '') {
         <meta name="description" content="<?= e($metaDescription) ?>">
     <?php endif; ?>
     <link rel="canonical" href="<?= e($canonicalUrl) ?>">
+    <?php if (indieauth_server_available()): ?>
+        <link rel="indieauth-metadata" href="<?= e(indieauth_endpoint_url('indieauth/metadata.php')) ?>">
+    <?php endif; ?>
     <?php if (!empty($config['assets']['favicon'])): ?>
         <?php $faviconHref = $config['assets']['favicon']; ?>
         <?php if ($faviconHref[0] === '/') { $faviconHref = get_base_url() . $faviconHref; } ?>

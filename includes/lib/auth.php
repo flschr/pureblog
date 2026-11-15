@@ -54,6 +54,35 @@ function is_admin_logged_in(): bool
     return !empty($_SESSION['is_admin']);
 }
 
+function set_admin_login_return_path(string $path): void
+{
+    start_admin_session();
+    $base = base_path();
+    $expectedPrefix = ($base !== '' ? $base : '') . '/';
+    if ($path === ''
+        || !str_starts_with($path, $expectedPrefix)
+        || str_starts_with($path, '//')
+        || parse_url($path, PHP_URL_HOST) !== null) {
+        throw new InvalidArgumentException('Invalid admin login return path.');
+    }
+    $_SESSION['admin_login_return_path'] = $path;
+}
+
+function admin_login_destination(array $config): string
+{
+    start_admin_session();
+    $returnPath = $_SESSION['admin_login_return_path'] ?? '';
+    unset($_SESSION['admin_login_return_path']);
+    if (is_string($returnPath) && $returnPath !== '') {
+        return $returnPath;
+    }
+    $blogPostsEnabled = $config['enable_blog_posts'] ?? true;
+    $adminLanding = (!$blogPostsEnabled || ($config['admin_homepage'] ?? 'dashboard') === 'content')
+        ? 'content.php'
+        : 'dashboard.php';
+    return base_path() . '/admin/' . $adminLanding;
+}
+
 function get_login_failure_state(string $ip): array
 {
     $file = PUREBLOG_DATA_PATH . '/login-failures.json';
