@@ -18,6 +18,16 @@ function plugin_media_remove_tree(string $path): void
     rmdir($path);
 }
 
+function on_prepare_media_upload(array $media): array
+{
+    if (($media['name'] ?? '') !== 'prepared.heic') return $media;
+    $prepared = dirname((string) $media['path']) . '/prepared.png';
+    $image = imagecreatetruecolor(64, 48);
+    imagepng($image, $prepared);
+    unset($image);
+    return ['path' => $prepared, 'temporary' => true];
+}
+
 $root = sys_get_temp_dir() . '/pureblog-plus-media-' . bin2hex(random_bytes(8));
 define('PUREBLOG_PLUS_DATA_PATH', $root . '/data');
 define('PUREBLOG_MEDIA_PATH', $root . '/public-media');
@@ -95,6 +105,15 @@ try {
     file_put_contents($references . '/post.md', "---\ntitle: Test\n---\n\n![Alt](" . $media['url'] . ")\n");
     plugin_media_assert(plus_media_is_referenced($media['url'], [$references]), 'Media reference was not detected.');
 
+    $preparedInput = $root . '/prepared.heic';
+    file_put_contents($preparedInput, 'synthetic unsupported input');
+    $preparedMedia = plus_store_uploaded_media([
+        'name' => 'prepared.heic', 'tmp_name' => $preparedInput, 'error' => UPLOAD_ERR_OK,
+    ], false);
+    plugin_media_assert($preparedMedia['mime_type'] === 'image/png', 'Prepared upload did not re-enter MIME validation.');
+    plugin_media_assert(is_file($preparedInput), 'Preparing an upload unexpectedly removed the source.');
+    plugin_media_assert(plus_delete_media($preparedMedia['id']), 'Prepared media could not be deleted.');
+
     $unsupported = $root . '/upload.txt';
     file_put_contents($unsupported, 'not media');
     try {
@@ -108,7 +127,7 @@ try {
     plugin_media_assert(plus_media_by_url($media['url']) === null, 'Deleted media record remains.');
     foreach ($publicVariantPaths as $path) plugin_media_assert(!is_file($path), 'Deleted media variant remains.');
 
-    echo "PASS: bundled plugin trust, local provider, shared media storage, responsive variants, authored alt text and deletion\n";
+    echo "PASS: bundled plugin trust, local provider, shared media storage, prepared formats, responsive variants, authored alt text and deletion\n";
 } finally {
     plugin_media_remove_tree($root);
 }
