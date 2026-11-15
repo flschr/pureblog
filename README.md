@@ -1,4 +1,18 @@
-# Pure Blog
+# Pure Blog Plus
+
+Pure Blog Plus is a maintained fork of [Pure Blog](https://github.com/kevquirk/pureblog),
+created by [Kev Quirk](https://kevquirk.com). It keeps Pure Blog's small,
+Markdown-first foundation and develops optional personal-publishing features around it.
+
+The current `main` branch is behaviorally identical to Pure Blog 3.9.2. The first Plus
+release is being designed around local-first IndieWeb publishing and an optional,
+loosely-coupled connection to GoToSocial Plus. Pure Blog Plus remains useful on its own;
+connecting another service is never required.
+
+See [the Plus architecture](docs/plus-architecture.md) for the agreed product boundaries
+and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blog.
+
+## Pure Blog foundation
 
 Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first editor and a lightweight admin area. It stores posts and pages as Markdown files on disk—no database required.
 
@@ -36,3 +50,5 @@ Posts live in `content/posts` and pages live in `content/pages`. When images are
 ## Notes
 - Pure Blog is intentionally minimal and designed for personal sites.
 - HTML in Markdown is supported.
+- Pure Blog Plus preserves the original Pure Blog license and attribution. See
+  [LICENSE.md](LICENSE.md).
