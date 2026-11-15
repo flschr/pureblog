@@ -61,6 +61,7 @@ try {
         'photo' => [['value' => 'https://example.test/photo.jpg', 'alt' => 'Example']],
     ]);
     micropub_test_assert($note['micropub_kind'] === 'note', 'Untitled entry was not mapped as a note.');
+    micropub_test_assert($note['micropub_content_format'] === 'markdown', 'String content did not enter the Markdown pipeline.');
     micropub_test_assert(str_starts_with($note['slug'], 'note-'), 'Note did not receive a stable generated slug.');
     $source = micropub_source($note);
     micropub_test_assert(!isset($source['properties']['name']), 'Generated note title leaked into source properties.');
