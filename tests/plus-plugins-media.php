@@ -113,6 +113,8 @@ try {
     plugin_media_assert($preparedMedia['mime_type'] === 'image/png', 'Prepared upload did not re-enter MIME validation.');
     plugin_media_assert(is_file($preparedInput), 'Preparing an upload unexpectedly removed the source.');
     plugin_media_assert(plus_delete_media($preparedMedia['id']), 'Prepared media could not be deleted.');
+    $editorScript = file_get_contents(dirname(__DIR__) . '/admin/js/editor.js');
+    plugin_media_assert(is_string($editorScript) && str_contains($editorScript, 'heic|heif'), 'Prepared image extensions are not accepted by editor drop handling.');
 
     $unsupported = $root . '/upload.txt';
     file_put_contents($unsupported, 'not media');
