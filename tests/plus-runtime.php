@@ -52,8 +52,10 @@ $dataPath = $root . '/plus';
 define('PUREBLOG_PLUS_DATA_PATH', $dataPath);
 
 try {
+    $cliSessionName = session_name();
     require dirname(__DIR__) . '/functions.php';
 
+    test_assert(session_name() === $cliSessionName, 'Pure Blog bootstrap changed the CLI session name.');
     test_assert(!is_dir($dataPath), 'Pure Blog bootstrap must not create Plus data.');
     test_assert(plus_has_capability('plus.runtime', 1, 0), 'Runtime capability missing.');
     test_assert(!plus_has_capability('plus.runtime', 2, 0), 'Unknown capability major accepted.');
