@@ -10,7 +10,9 @@ loosely-coupled connection to GoToSocial Plus. Pure Blog Plus remains useful on 
 connecting another service is never required.
 
 See [the Plus architecture](docs/plus-architecture.md) for the agreed product boundaries
-and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blog.
+and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blog. The
+[Plus runtime](docs/plus-runtime.md) documents lazy SQLite migrations, capabilities, and
+the local background-job queue used by optional protocols and connectors.
 
 ## Pure Blog foundation
 
@@ -32,6 +34,7 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 - A standard web server (Apache or Nginx)
 - **Required PHP extensions:** `mbstring`, `xml`
 - **Recommended PHP extensions:** `curl`, `zip`
+- **Required for Plus protocols and connectors:** `pdo_sqlite`
 - Write access to `/config`, `/content`, and `/data`
 
 > **Nginx users:** you will also need `php-fpm` configured alongside Nginx, as PHP-FPM is required to process PHP when not using Apache.

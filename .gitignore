@@ -1,5 +1,6 @@
 /backup/
 /cache/
 /vendor/
+/data/plus/
 .DS_Store
 content/posts/.scheduler.lock
