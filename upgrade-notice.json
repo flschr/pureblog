@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "An optional one-account Mastodon-compatible connector can now maintain a local microblog projection and announce selected blog posts. It remains disabled until authorized under Settings → Social. Existing content, media, and standalone behavior are unchanged."
+    "instructions": "Micropub string content now enters the normal Markdown pipeline, so generated media descriptions fill empty image alt text while authored alt text remains unchanged."
 }

@@ -123,12 +123,12 @@ function micropub_content_value(array $properties): array
 {
     $value = $properties['content'][0] ?? '';
     if (is_string($value)) {
-        return [$value, 'text'];
+        return [$value, 'markdown'];
     }
     if (is_array($value) && isset($value['html']) && is_string($value['html'])) {
         return [$value['html'], 'html'];
     }
-    return ['', 'text'];
+    return ['', 'markdown'];
 }
 
 function micropub_note_title(string $content, string $published): string
@@ -148,9 +148,6 @@ function micropub_supported_property_names(): array
 function micropub_properties_to_post(array $properties, array $commands = [], ?array $existing = null): array
 {
     [$content, $contentFormat] = micropub_content_value($properties);
-    if ($existing !== null && $contentFormat === 'text') {
-        $contentFormat = (string) ($existing['micropub_content_format'] ?? 'markdown');
-    }
     $altContext = trim(micropub_first_string($properties, 'name') . "\n" . strip_tags($content));
     if ($contentFormat === 'html') {
         $content = plus_apply_media_alts_to_html($content, $altContext);

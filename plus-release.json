@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.9",
+    "version": "3.9.2-plus.10",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
@@ -18,7 +18,7 @@
         "includes/plus/indieauth.php": "75204e9cd504391f82bcfb8a96201955dd08721d3d770745b37189b24d0bd804",
         "includes/plus/indieauth-client.php": "568fb5dfe6f8e3c3096cd29c9c6e8b1a746f349fe95aab34f473763bea613edc",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
-        "includes/plus/micropub.php": "1c32526b173972423748095defaabc399e05aa4437bb5fbb9702b184c1a2ecf3",
+        "includes/plus/micropub.php": "0f2de6bc8646fe5fc99d7b6c60ccf1c005f42ea45d9c50417945f57151178781",
         "includes/plus/webmentions.php": "242fd64a034304f7b0447cf08c30f7940228cf2c397b6805919d56005165e8ed",
         "includes/plus/webmention-sender.php": "28b49c0969ea6e7bfc814b4cfc5760ea4cfd0f5e507c46a860e1056aa054813d",
         "includes/plus/social-connector.php": "19b2d01d60a91445585089ad14e860afbc8e61fcc21cc51edf8c0f012a205758",

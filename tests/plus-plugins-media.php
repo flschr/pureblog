@@ -100,6 +100,9 @@ try {
     plugin_media_assert(str_contains($filledMarkdown, '![A reusable blue image description.]'), 'Empty Markdown alt text was not filled.');
     $authoredMarkdown = '![Author choice](' . $media['url'] . ')';
     plugin_media_assert(plus_apply_media_alts_to_markdown($authoredMarkdown) === $authoredMarkdown, 'Authored Markdown alt text was replaced.');
+    $micropubPost = micropub_properties_to_post(['content' => ['Before ![](' . $media['url'] . ') and ![Author choice](' . $media['url'] . ')']]);
+    plugin_media_assert(str_contains($micropubPost['content'], '![A reusable blue image description.]'), 'New Micropub Markdown did not receive the default alt text.');
+    plugin_media_assert(str_contains($micropubPost['content'], $authoredMarkdown), 'New Micropub Markdown replaced authored alt text.');
     $filledHtml = plus_apply_media_alts_to_html('<p><img src="' . $media['url'] . '" alt=""></p>');
     plugin_media_assert(str_contains($filledHtml, 'alt="A reusable blue image description."'), 'Empty HTML alt text was not filled.');
     $authoredHtml = '<img src="' . $media['url'] . '" alt="Author choice">';
