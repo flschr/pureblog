@@ -1011,7 +1011,7 @@ function build_search_index(): bool
         return false;
     }
 
-    return file_put_contents(PUREBLOG_SEARCH_INDEX_PATH, $json, LOCK_EX) !== false;
+    return pureblog_atomic_write_file(PUREBLOG_SEARCH_INDEX_PATH, $json);
 }
 
 function build_tag_index(): bool
@@ -1041,7 +1041,7 @@ function build_tag_index(): bool
         return false;
     }
 
-    return file_put_contents(PUREBLOG_TAG_INDEX_PATH, $json, LOCK_EX) !== false;
+    return pureblog_atomic_write_file(PUREBLOG_TAG_INDEX_PATH, $json);
 }
 
 function load_tag_index(): ?array

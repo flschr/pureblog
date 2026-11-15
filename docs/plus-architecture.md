@@ -49,6 +49,11 @@ The complete standalone CMS must work with PHP, SQLite, the local filesystem, an
 background-job mechanism. CDN, object storage, external backup providers, and hosted
 identity services are optional adapters rather than requirements.
 
+Markdown mutations use one installation-wide writer lock. New content is flushed to a
+same-directory temporary file and atomically renamed; slug/date changes and legacy image-folder
+moves are committed or rolled back together. Deletes first move content and its legacy media to
+private trash before cleanup, so readers never observe half a rename or delete.
+
 Installation topology is deliberately independent: Pure Blog Plus and GoToSocial Plus can
 run on different hosts and be upgraded or disconnected separately. Unknown connector
 capabilities fail closed without preventing either standalone product from starting.

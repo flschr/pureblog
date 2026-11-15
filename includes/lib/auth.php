@@ -9,17 +9,79 @@ declare(strict_types=1);
 function start_admin_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
-        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => base_path() ?: '/',
-            'secure' => $isHttps,
+            'secure' => request_is_https(),
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
         session_start();
     }
+}
+
+function request_is_https(): bool
+{
+    $config = load_config();
+    $baseUrl = trim((string) ($config['base_url'] ?? ''));
+    if ($baseUrl !== '') {
+        return strtolower((string) parse_url($baseUrl, PHP_URL_SCHEME)) === 'https';
+    }
+
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
+}
+
+function request_ip_matches_network(string $address, string $network): bool
+{
+    [$networkAddress, $prefixText] = array_pad(explode('/', trim($network), 2), 2, '');
+    $addressBytes = @inet_pton($address);
+    $networkBytes = @inet_pton($networkAddress);
+    if ($addressBytes === false || $networkBytes === false || strlen($addressBytes) !== strlen($networkBytes)) {
+        return false;
+    }
+    $maximumBits = strlen($addressBytes) * 8;
+    $prefix = $prefixText === '' ? $maximumBits : filter_var($prefixText, FILTER_VALIDATE_INT);
+    if ($prefix === false || $prefix < 0 || $prefix > $maximumBits) {
+        return false;
+    }
+    $wholeBytes = intdiv((int) $prefix, 8);
+    $remainingBits = (int) $prefix % 8;
+    if ($wholeBytes > 0 && substr($addressBytes, 0, $wholeBytes) !== substr($networkBytes, 0, $wholeBytes)) {
+        return false;
+    }
+    if ($remainingBits === 0) {
+        return true;
+    }
+    $mask = (0xFF << (8 - $remainingBits)) & 0xFF;
+    return (ord($addressBytes[$wholeBytes]) & $mask) === (ord($networkBytes[$wholeBytes]) & $mask);
+}
+
+function request_client_ip(): string
+{
+    $remoteAddress = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    $configured = load_config()['trusted_proxies'] ?? [];
+    if (is_string($configured)) {
+        $configured = preg_split('/[\s,]+/', $configured, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+    $networks = is_array($configured) ? $configured : [];
+    $isTrusted = static function (string $address) use ($networks): bool {
+        foreach ($networks as $network) {
+            if (request_ip_matches_network($address, (string) $network)) return true;
+        }
+        return false;
+    };
+    if (!$isTrusted($remoteAddress)) {
+        return filter_var($remoteAddress, FILTER_VALIDATE_IP) !== false ? $remoteAddress : 'unknown';
+    }
+
+    $chain = array_values(array_filter(array_map('trim', explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''))),
+        static fn(string $candidate): bool => filter_var($candidate, FILTER_VALIDATE_IP) !== false));
+    $chain[] = $remoteAddress;
+    for ($index = count($chain) - 1; $index >= 0; $index--) {
+        if (!$isTrusted($chain[$index])) return $chain[$index];
+    }
+    return $chain[0] ?? 'unknown';
 }
 
 function csrf_token(): string
@@ -85,69 +147,53 @@ function admin_login_destination(array $config): string
 
 function get_login_failure_state(string $ip): array
 {
-    $file = PUREBLOG_DATA_PATH . '/login-failures.json';
-    if (!is_file($file)) {
-        return ['failures' => 0, 'lockout_until' => 0];
-    }
-    $data = json_decode((string) @file_get_contents($file), true);
-    if (!is_array($data) || !isset($data[$ip])) {
+    $query = plus_database()->prepare(
+        'SELECT failures,lockout_until FROM plus_login_failures WHERE client_key=?'
+    );
+    $query->execute([$ip]);
+    $row = $query->fetch();
+    if (!is_array($row)) {
         return ['failures' => 0, 'lockout_until' => 0];
     }
     return [
-        'failures'      => (int) ($data[$ip]['failures'] ?? 0),
-        'lockout_until' => (int) ($data[$ip]['lockout_until'] ?? 0),
+        'failures'      => (int) $row['failures'],
+        'lockout_until' => (int) $row['lockout_until'],
     ];
 }
 
 function record_login_failure(string $ip): array
 {
-    $file = PUREBLOG_DATA_PATH . '/login-failures.json';
-    $data = [];
-    if (is_file($file)) {
-        $decoded = json_decode((string) @file_get_contents($file), true);
-        if (is_array($decoded)) {
-            $data = $decoded;
-        }
-    }
-
+    $database = plus_database();
     $now = time();
-    foreach (array_keys($data) as $storedIp) {
-        $until = (int) ($data[$storedIp]['lockout_until'] ?? 0);
-        if ($until > 0 && $until < $now - 3600) {
-            unset($data[$storedIp]);
+    plus_begin_immediate($database);
+    try {
+        $database->prepare(
+            'DELETE FROM plus_login_failures WHERE lockout_until>0 AND lockout_until<?'
+        )->execute([$now - 3600]);
+        $query = $database->prepare(
+            'SELECT failures FROM plus_login_failures WHERE client_key=?'
+        );
+        $query->execute([$ip]);
+        $failures = (int) ($query->fetchColumn() ?: 0) + 1;
+        $lockoutUntil = $failures >= 5 ? $now + (5 * 60) : 0;
+        $database->prepare(
+            'INSERT INTO plus_login_failures (client_key,failures,lockout_until,updated_at) '
+            . 'VALUES (?,?,?,?) ON CONFLICT(client_key) DO UPDATE SET '
+            . 'failures=excluded.failures,lockout_until=excluded.lockout_until,updated_at=excluded.updated_at'
+        )->execute([$ip, $failures, $lockoutUntil, $now]);
+        $database->exec('COMMIT');
+        return ['failures' => $failures, 'lockout_until' => $lockoutUntil];
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
         }
+        throw $error;
     }
-
-    $entry = $data[$ip] ?? ['failures' => 0, 'lockout_until' => 0];
-    $entry['failures'] = (int) $entry['failures'] + 1;
-    if ($entry['failures'] >= 5) {
-        $entry['lockout_until'] = $now + (5 * 60);
-    }
-    $data[$ip] = $entry;
-
-    if (!is_dir(PUREBLOG_DATA_PATH)) {
-        mkdir(PUREBLOG_DATA_PATH, 0755, true);
-    }
-    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
-
-    return [
-        'failures'      => (int) $entry['failures'],
-        'lockout_until' => (int) ($entry['lockout_until'] ?? 0),
-    ];
 }
 
 function clear_login_failures(string $ip): void
 {
-    $file = PUREBLOG_DATA_PATH . '/login-failures.json';
-    if (!is_file($file)) {
-        return;
-    }
-    $data = json_decode((string) @file_get_contents($file), true);
-    if (!is_array($data)) {
-        return;
-    }
-    unset($data[$ip]);
-    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
+    plus_database()->prepare('DELETE FROM plus_login_failures WHERE client_key=?')->execute([$ip]);
 }
 
 // Derive unique remember-me cookie name based on site URL to prevent collisions.
@@ -162,40 +208,26 @@ function set_remember_me_cookie(): void
     $validator = bin2hex(random_bytes(32));
     $expires   = time() + (90 * 24 * 60 * 60);
 
-    $file   = PUREBLOG_DATA_PATH . '/remember-me.json';
-    $tokens = [];
-    if (is_file($file)) {
-        $decoded = json_decode((string) @file_get_contents($file), true);
-        if (is_array($decoded)) {
-            $tokens = $decoded;
-        }
-    }
-
     $now = time();
-    foreach (array_keys($tokens) as $storedSelector) {
-        if ((int) ($tokens[$storedSelector]['expires'] ?? 0) < $now) {
-            unset($tokens[$storedSelector]);
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        $database->prepare('DELETE FROM plus_remember_tokens WHERE expires_at<?')->execute([$now]);
+        $database->prepare(
+            'INSERT INTO plus_remember_tokens (selector,validator_hash,expires_at,created_at) VALUES (?,?,?,?)'
+        )->execute([$selector, hash('sha256', $validator), $expires, $now]);
+        $database->exec('COMMIT');
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
         }
+        throw $error;
     }
 
-    $tokens[$selector] = [
-        'validator_hash' => hash('sha256', $validator),
-        'expires'        => $expires,
-    ];
-
-    if (!is_dir(PUREBLOG_DATA_PATH)) {
-        mkdir(PUREBLOG_DATA_PATH, 0755, true);
-    }
-    if (file_put_contents($file, json_encode($tokens, JSON_PRETTY_PRINT), LOCK_EX) === false) {
-        return;
-    }
-
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
     setcookie(get_remember_me_cookie_name(), $selector . ':' . $validator, [
         'expires'  => $expires,
         'path'     => base_path() ?: '/',
-        'secure'   => $isHttps,
+        'secure'   => request_is_https(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -208,23 +240,14 @@ function clear_remember_me_cookie(): void
     if ($cookie !== '') {
         $parts = explode(':', $cookie, 2);
         if (count($parts) === 2) {
-            $file = PUREBLOG_DATA_PATH . '/remember-me.json';
-            if (is_file($file)) {
-                $tokens = json_decode((string) @file_get_contents($file), true);
-                if (is_array($tokens)) {
-                    unset($tokens[$parts[0]]);
-                    file_put_contents($file, json_encode($tokens, JSON_PRETTY_PRINT), LOCK_EX);
-                }
-            }
+            plus_database()->prepare('DELETE FROM plus_remember_tokens WHERE selector=?')->execute([$parts[0]]);
         }
     }
 
-    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
     setcookie($cookieName, '', [
         'expires'  => time() - 3600,
         'path'     => base_path() ?: '/',
-        'secure'   => $isHttps,
+        'secure'   => request_is_https(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -232,10 +255,7 @@ function clear_remember_me_cookie(): void
 
 function clear_all_remember_me_tokens(): void
 {
-    $file = PUREBLOG_DATA_PATH . '/remember-me.json';
-    if (is_file($file)) {
-        file_put_contents($file, json_encode([], JSON_PRETTY_PRINT), LOCK_EX);
-    }
+    plus_database()->exec('DELETE FROM plus_remember_tokens');
 }
 
 function maybe_restore_admin_from_cookie(): void
@@ -254,25 +274,46 @@ function maybe_restore_admin_from_cookie(): void
     }
     [$selector, $validator] = $parts;
 
-    $file = PUREBLOG_DATA_PATH . '/remember-me.json';
-    if (!is_file($file)) {
+    $query = plus_database()->prepare(
+        'SELECT validator_hash,expires_at FROM plus_remember_tokens WHERE selector=?'
+    );
+    $query->execute([$selector]);
+    $entry = $query->fetch();
+    if (!is_array($entry)) {
         return;
     }
-    $tokens = json_decode((string) @file_get_contents($file), true);
-    if (!is_array($tokens) || !isset($tokens[$selector])) {
-        return;
-    }
-
-    $entry = $tokens[$selector];
-    if ((int) ($entry['expires'] ?? 0) < time()) {
-        unset($tokens[$selector]);
-        file_put_contents($file, json_encode($tokens, JSON_PRETTY_PRINT), LOCK_EX);
+    if ((int) $entry['expires_at'] < time()) {
+        plus_database()->prepare('DELETE FROM plus_remember_tokens WHERE selector=?')->execute([$selector]);
         return;
     }
 
     if (!hash_equals((string) ($entry['validator_hash'] ?? ''), hash('sha256', $validator))) {
         return;
     }
+
+    $newSelector = bin2hex(random_bytes(16));
+    $newValidator = bin2hex(random_bytes(32));
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        $delete = $database->prepare('DELETE FROM plus_remember_tokens WHERE selector=? AND validator_hash=?');
+        $delete->execute([$selector, (string) $entry['validator_hash']]);
+        if ($delete->rowCount() !== 1) {
+            $database->exec('ROLLBACK');
+            return;
+        }
+        $database->prepare(
+            'INSERT INTO plus_remember_tokens (selector,validator_hash,expires_at,created_at) VALUES (?,?,?,?)'
+        )->execute([$newSelector, hash('sha256', $newValidator), (int) $entry['expires_at'], time()]);
+        $database->exec('COMMIT');
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->exec('ROLLBACK');
+        throw $error;
+    }
+    setcookie(get_remember_me_cookie_name(), $newSelector . ':' . $newValidator, [
+        'expires' => (int) $entry['expires_at'], 'path' => base_path() ?: '/',
+        'secure' => request_is_https(), 'httponly' => true, 'samesite' => 'Lax',
+    ]);
 
     session_regenerate_id(true);
     $_SESSION['is_admin'] = true;

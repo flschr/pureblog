@@ -87,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
     $timezone = trim($_POST['timezone'] ?? '');
     $dateFormat = trim($_POST['date_format'] ?? '');
     $baseUrl = trim($_POST['base_url'] ?? '');
+    $trustedProxies = preg_split('/[\s,]+/', trim((string) ($_POST['trusted_proxies'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
     $homepageSlug = trim($_POST['homepage_slug'] ?? '');
     $blogPageSlug = trim($_POST['blog_page_slug'] ?? '');
     $searchPageSlug = trim($_POST['search_page_slug'] ?? '');
@@ -113,6 +114,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
     }
     if ($dateFormat === '') {
         $errors[] = t('admin.settings.site.error_date_format');
+    }
+    if (!pureblog_valid_base_url($baseUrl)) {
+        $errors[] = 'The site URL must be an HTTPS URL (HTTP is allowed only on localhost).';
+    }
+    foreach ($trustedProxies as $network) {
+        $address = explode('/', $network, 2)[0];
+        if (!request_ip_matches_network($address, $network)) {
+            $errors[] = 'Trusted proxies must contain only valid IP addresses or CIDR networks.';
+            break;
+        }
     }
 
     if ($homepageSlug !== '' && !isset($pageSlugLookup[$homepageSlug])) {
@@ -157,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
         $config['date_format'] = $dateFormat;
         $config['show_reading_time'] = $showReadingTime;
         $config['base_url'] = $baseUrl;
+        $config['trusted_proxies'] = array_values($trustedProxies);
         $config['homepage_slug'] = $homepageSlug;
         $config['blog_page_slug'] = $blogPageSlug;
         $config['search_page_slug'] = $searchPageSlug;
@@ -379,6 +391,10 @@ require __DIR__ . '/../includes/admin-head.php';
 
                 <label for="base_url"><?= e(t('admin.settings.site.base_url')) ?></label>
                 <input type="text" id="base_url" name="base_url" value="<?= e($config['base_url']) ?>">
+
+                <label for="trusted_proxies">Trusted reverse proxies</label>
+                <input type="text" id="trusted_proxies" name="trusted_proxies" value="<?= e(implode(', ', (array) ($config['trusted_proxies'] ?? []))) ?>" placeholder="192.0.2.10, 2001:db8::/32">
+                <p class="tip">Only addresses listed here may supply the client IP used for login rate limits. Leave empty without a reverse proxy.</p>
 
                 <label for="favicon"><?= e(t('admin.settings.site.favicon')) ?> <span class="tip">(<?= e(t('admin.settings.site.tip_favicon')) ?>)</span></label>
                 <input type="file" id="favicon" name="favicon" accept="image/*">

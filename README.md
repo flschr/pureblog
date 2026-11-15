@@ -51,15 +51,20 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 - **Required for cross-origin IndieAuth clients:** `curl`
 - Write access to `/config`, `/content`, and `/data`
 
-> **Nginx users:** you will also need `php-fpm` configured alongside Nginx, as PHP-FPM is required to process PHP when not using Apache.
+> **Nginx users:** configure PHP-FPM and include the deny rules from
+> [`docs/nginx-security.conf.example`](docs/nginx-security.conf.example) in the site `server`
+> block. They prevent direct downloads of the private SQLite database, credentials, drafts,
+> and Markdown sources. Apache installations receive equivalent rules from `.htaccess`.
 
 ## Getting started
 All you need to run Pure Blog is a host that supports PHP (pretty much all of them do). Once you have that, all you need to do is:
 
 1. Download the Pure Blog package.
 2. Extract the zip file and upload the contents to your web server.
-3. Visit the URL of your blog and setup will automatically start.
-4. Once your site is setup, visit `/admin` and login to your new blog.
+3. On the server, run `php bin/setup-token.php` once and keep the printed token private.
+4. Visit the URL of your blog, enter that token, and complete setup. You can instead provide
+   a `PUREBLOG_SETUP_TOKEN` environment variable when command-line access is unavailable.
+5. Once your site is setup, visit `/admin` and login to your new blog.
 
 ## Content
 Posts live in `content/posts` and pages live in `content/pages`. New admin and Micropub

@@ -39,7 +39,7 @@ function plus_s3_media_store(array $asset, array $files, array $settings): array
     try {
         foreach ($files as $file) {
             $key = $prefix . basename((string) $file['name']);
-            plus_s3_request('PUT', $key, (string) file_get_contents((string) $file['path']), (string) $file['mime_type'], $settings);
+            plus_s3_upload_file($key, (string) $file['path'], (string) $file['mime_type'], $settings);
             $uploaded[] = $key;
         }
     } catch (Throwable $error) {
@@ -73,6 +73,14 @@ function plus_s3_media_store(array $asset, array $files, array $settings): array
     ];
 }
 
+function plus_s3_upload_file(string $key, string $path, string $contentType, array $settings): void
+{
+    $size = is_file($path) ? filesize($path) : false;
+    $payloadHash = is_file($path) ? hash_file('sha256', $path) : false;
+    if ($size === false || $payloadHash === false) throw new RuntimeException('S3 upload source is unavailable.');
+    plus_s3_request('PUT', $key, '', $contentType, $settings, $path, $payloadHash, (int) $size);
+}
+
 function plus_s3_media_delete(array $media, array $settings): void
 {
     foreach ((array) ($media['provider_data']['keys'] ?? []) as $key) {
@@ -81,7 +89,16 @@ function plus_s3_media_delete(array $media, array $settings): void
     }
 }
 
-function plus_s3_request(string $method, string $key, string $body, string $contentType, array $settings): void
+function plus_s3_request(
+    string $method,
+    string $key,
+    string $body,
+    string $contentType,
+    array $settings,
+    ?string $uploadPath = null,
+    ?string $payloadHash = null,
+    ?int $uploadSize = null
+): void
 {
     if (!function_exists('curl_init')) {
         throw new RuntimeException('S3 media requires the curl extension.');
@@ -105,16 +122,24 @@ function plus_s3_request(string $method, string $key, string $body, string $cont
     $url = 'https://' . $hostHeader . $canonicalUri;
     $signed = plus_s3_signature_headers(
         $method, $canonicalUri, $body, $contentType, $hostHeader,
-        (string) $settings['region'], (string) $settings['access_key'], (string) $settings['secret_key']
+        (string) $settings['region'], (string) $settings['access_key'], (string) $settings['secret_key'], null, $payloadHash
     );
     $port = (int) ($parts['port'] ?? 443);
     $resolvedIp = str_contains($ips[0], ':') ? '[' . $ips[0] . ']' : $ips[0];
     $handle = curl_init($url);
     if ($handle === false) throw new RuntimeException('Unable to initialize S3 media request.');
+    $uploadStream = null;
+    if ($uploadPath !== null) {
+        $uploadStream = fopen($uploadPath, 'rb');
+        if ($uploadStream === false) {
+            curl_close($handle);
+            throw new RuntimeException('Unable to open the S3 upload source.');
+        }
+    }
     $responseBody = '';
     $tooLarge = false;
-    curl_setopt_array($handle, [
-        CURLOPT_CUSTOMREQUEST => $method, CURLOPT_POSTFIELDS => $body,
+    $curlOptions = [
+        CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_FOLLOWLOCATION => false, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 60,
         CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_PROXY => '',
         CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $resolvedIp],
@@ -127,11 +152,20 @@ function plus_s3_request(string $method, string $key, string $body, string $cont
             $responseBody .= $chunk;
             return strlen($chunk);
         },
-    ]);
+    ];
+    if (is_resource($uploadStream)) {
+        $curlOptions[CURLOPT_UPLOAD] = true;
+        $curlOptions[CURLOPT_INFILE] = $uploadStream;
+        $curlOptions[CURLOPT_INFILESIZE] = $uploadSize ?? 0;
+    } else {
+        $curlOptions[CURLOPT_POSTFIELDS] = $body;
+    }
+    curl_setopt_array($handle, $curlOptions);
     $response = curl_exec($handle);
     $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
     $error = curl_error($handle);
     curl_close($handle);
+    if (is_resource($uploadStream)) fclose($uploadStream);
     if ($tooLarge || $response === false || $status < 200 || $status >= 300) {
         throw new RuntimeException($error !== '' ? $error : 'S3 media request returned HTTP ' . $status . '.');
     }
@@ -147,12 +181,14 @@ function plus_s3_signature_headers(
     string $region,
     string $accessKey,
     string $secretKey,
-    ?string $amzDate = null
+    ?string $amzDate = null,
+    ?string $payloadHash = null
 ): array {
     $amzDate ??= gmdate('Ymd\THis\Z');
     if (preg_match('/^\d{8}T\d{6}Z$/', $amzDate) !== 1) throw new InvalidArgumentException('Invalid S3 signing date.');
     $date = substr($amzDate, 0, 8);
-    $payloadHash = hash('sha256', $body);
+    $payloadHash ??= hash('sha256', $body);
+    if (preg_match('/^[a-f0-9]{64}$/', $payloadHash) !== 1) throw new InvalidArgumentException('Invalid S3 payload hash.');
     $canonicalHeaders = 'content-type:' . trim($contentType) . "\n" . 'host:' . strtolower(trim($host)) . "\n"
         . 'x-amz-content-sha256:' . $payloadHash . "\n" . 'x-amz-date:' . $amzDate . "\n";
     $signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date';

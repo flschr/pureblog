@@ -81,6 +81,7 @@ function default_config(): array
         'search_page_notified' => false,
 
         'base_url' => '',
+        'trusted_proxies' => [],
         'language' => 'en',
         'timezone' => date_default_timezone_get(),
         'date_format' => 'F j, Y',

@@ -36,10 +36,10 @@ The media library can edit or clear the reusable default.
 `s3-media` uploads the same originals and variants to an administrator-configured,
 S3-compatible HTTPS endpoint. It requires a bucket, region, access key, secret key, and
 public base URL. Requests are signed locally with Signature Version 4, do not use an
-environment proxy, and pin the request to a public DNS result. The plugin is inactive until
+environment proxy, pin the request to a public DNS result, and stream upload bodies from disk. The plugin is inactive until
 it is selected and completely configured.
 
-`openai-alt-text` is an optional editor aid. When selected, the private retained image and
+`openai-alt-text` is an optional editor aid. When selected, the smallest public responsive image and
 up to 2,500 characters of editorial context are sent to the configured OpenAI API account.
 The returned text is stored as the editable media description and inserted as alt text only
 when the relevant occurrence is empty. Micropub media uploads generate the same reusable
@@ -47,6 +47,10 @@ description; create and update requests copy it into empty Markdown, HTML, or st
 alt text. Micropub clients can provide their own alt text without this plugin, and that value
 always wins. The standalone CMS never requires an AI service. Generation failures never fail
 the media upload or post save.
+
+Managed deletion is durable: the database marks an asset as deleting before invoking its
+provider. If provider or local cleanup fails, the record remains retryable and a later attempt
+continues the same idempotent deletion.
 
 Plugin secrets are saved in the existing private PHP configuration file. They are never
 rendered back into the settings form. Disabling an optional plugin leaves Markdown, media

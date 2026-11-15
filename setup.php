@@ -9,6 +9,17 @@ if (is_installed()) {
     exit;
 }
 
+$setupTokenPath = PUREBLOG_DATA_PATH . '/setup-token';
+$environmentSetupToken = trim((string) getenv('PUREBLOG_SETUP_TOKEN'));
+$setupTokenHash = $environmentSetupToken !== ''
+    ? hash('sha256', $environmentSetupToken)
+    : trim((string) @file_get_contents($setupTokenPath));
+if (!preg_match('/^[a-f0-9]{64}$/', $setupTokenHash)) {
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit("Setup is locked. Run `php bin/setup-token.php` on the server, then reload this page.\n");
+}
+
 $config = default_config();
 $errors = [];
 $values = [
@@ -31,6 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values['admin_username'] = trim($_POST['admin_username'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm = $_POST['confirm_password'] ?? '';
+    $submittedSetupToken = trim((string) ($_POST['setup_token'] ?? ''));
+
+    if ($submittedSetupToken === '' || !hash_equals($setupTokenHash, hash('sha256', $submittedSetupToken))) {
+        $errors[] = 'The setup token is invalid.';
+    }
 
     if ($values['site_title'] === '') {
         $errors[] = t('setup.error_title');
@@ -38,6 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($values['admin_username'] === '') {
         $errors[] = t('setup.error_username');
+    }
+
+    if (!pureblog_valid_base_url($values['base_url'])) {
+        $errors[] = 'The site URL must be an HTTPS URL (HTTP is allowed only on localhost).';
     }
 
     if ($password === '' || $confirm === '') {
@@ -59,6 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_dir($configDir) && !mkdir($configDir, 0755, true)) {
             $errors[] = t('setup.error_config_dir');
         } elseif (save_config($config)) {
+            if ($environmentSetupToken === '') {
+                @unlink($setupTokenPath);
+            }
             header('Location: ' . base_path() . '/admin/index.php?setup=1', true, 303);
             exit;
         }
@@ -88,6 +111,9 @@ require __DIR__ . '/includes/admin-head.php';
         <?php endif; ?>
 
         <form method="post">
+            <label for="setup_token">Setup token</label>
+            <input type="password" id="setup_token" name="setup_token" required autocomplete="off">
+
             <label for="language"><?= e(t('setup.language')) ?></label>
             <select id="language" name="language" onchange="window.location.href='?lang='+encodeURIComponent(this.value)">
                 <?php foreach (lang_available() as $code => $nativeName): ?>

@@ -84,6 +84,21 @@ try {
     plus_database();
     test_assert($migrationRuns === 1, 'Migration was not idempotent.');
 
+    test_assert(request_ip_matches_network('192.0.2.9', '192.0.2.0/24'), 'IPv4 trusted proxy network did not match.');
+    test_assert(!request_ip_matches_network('192.0.3.9', '192.0.2.0/24'), 'IPv4 trusted proxy network overmatched.');
+    test_assert(request_ip_matches_network('2001:db8::9', '2001:db8::/32'), 'IPv6 trusted proxy network did not match.');
+    for ($failure = 1; $failure <= 5; $failure++) {
+        $failureState = record_login_failure('192.0.2.44');
+        test_assert($failureState['failures'] === $failure, 'Login failure increment was not atomic.');
+    }
+    test_assert($failureState['lockout_until'] > time(), 'Login failure threshold did not lock out.');
+    clear_login_failures('192.0.2.44');
+    test_assert(get_login_failure_state('192.0.2.44')['failures'] === 0, 'Login failure state was not cleared.');
+    set_remember_me_cookie();
+    test_assert((int) $database->query('SELECT COUNT(*) FROM plus_remember_tokens')->fetchColumn() === 1, 'Remember token was not stored transactionally.');
+    clear_all_remember_me_tokens();
+    test_assert((int) $database->query('SELECT COUNT(*) FROM plus_remember_tokens')->fetchColumn() === 0, 'Remember tokens were not cleared.');
+
     $first = plus_enqueue_job('test.once', ['value' => 1], 1000, 2, 'same-event');
     $duplicate = plus_enqueue_job('test.once', ['value' => 2], 1000, 2, 'same-event');
     test_assert($first['id'] === $duplicate['id'], 'Idempotent enqueue created a duplicate.');
@@ -121,8 +136,11 @@ try {
     sort($results);
     test_assert($results === [null, $parallel['id']], 'Parallel workers did not claim exactly once.');
 
-    plus_register_job_handler('test.handler', static function (array $payload): void {
+    plus_register_job_handler('test.handler', static function (array $payload, array $job): void {
         test_assert($payload['ok'] === true, 'Handler payload mismatch.');
+        plus_database()->prepare('UPDATE plus_jobs SET lease_until=? WHERE id=?')->execute([time() - 1, $job['id']]);
+        plus_job_heartbeat();
+        test_assert((int) plus_get_job((int) $job['id'])['lease_until'] > time(), 'Handler heartbeat did not renew the active lease.');
     });
     plus_enqueue_job('test.handler', ['ok' => true], time(), 1);
     $run = plus_run_due_jobs('runner', 5);
@@ -131,6 +149,17 @@ try {
     $missingRun = plus_run_due_jobs('runner-missing', 1);
     test_assert($missingRun === ['claimed' => 1, 'succeeded' => 0, 'failed' => 1], 'Missing handler was not isolated.');
     test_assert(plus_get_job((int) $missing['id'])['state'] === 'failed', 'Missing handler job did not stop after its final attempt.');
+
+    $oldSucceeded = plus_enqueue_job('test.old-succeeded', [], 1000, 1);
+    $oldClaim = plus_claim_job('old-worker', 30, 1000);
+    test_assert($oldClaim !== null && $oldClaim['id'] === $oldSucceeded['id'], 'Old succeeded job was not claimed.');
+    plus_complete_job((int) $oldSucceeded['id'], 'old-worker', 1001);
+    $oldFailed = plus_enqueue_job('test.old-failed', [], 1002, 1);
+    $failedClaim = plus_claim_job('failed-worker', 30, 1002);
+    test_assert($failedClaim !== null && $failedClaim['id'] === $oldFailed['id'], 'Old failed job was not claimed.');
+    plus_fail_job((int) $oldFailed['id'], 'failed-worker', 'old failure', null, 1003);
+    $pruned = plus_prune_jobs(20000000, 86400, 172800);
+    test_assert($pruned === ['succeeded' => 1, 'failed' => 1], 'Terminal job retention did not prune bounded history.');
 
     $migrationPath = $root . '/migration';
     $failedMigration = test_process_command([
