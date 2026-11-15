@@ -116,6 +116,7 @@ function indieauth_resolve_url_reference(string $baseUrl, string $reference): st
         $directory = substr($basePath, 0, (int) strrpos($basePath, '/') + 1);
         $path = $directory . $reference;
     }
+    $trailingSlash = str_ends_with($path, '/');
     $segments = [];
     foreach (explode('/', str_replace('\\', '/', $path)) as $segment) {
         if ($segment === '' || $segment === '.') {
@@ -127,7 +128,11 @@ function indieauth_resolve_url_reference(string $baseUrl, string $reference): st
         }
         $segments[] = $segment;
     }
-    return $origin . '/' . implode('/', $segments) . $query . $fragment;
+    $normalizedPath = '/' . implode('/', $segments);
+    if ($trailingSlash && $normalizedPath !== '/') {
+        $normalizedPath .= '/';
+    }
+    return $origin . $normalizedPath . $query . $fragment;
 }
 
 function indieauth_url_origin(string $url): string
