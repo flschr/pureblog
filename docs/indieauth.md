@@ -28,9 +28,8 @@ are not cached, cannot be framed, and load no third-party assets.
 
 Authorization codes expire after five minutes and can be used only once. Codes and access
 tokens are stored only as SHA-256 hashes in the local Plus SQLite database. Access tokens
-do not expire automatically in this first version, but can be listed and revoked through
-the server-side token functions. Refresh tokens and dynamic client registration are not
-supported.
+do not expire automatically in this first version. The owner can inspect and revoke them
+under **Settings → User**. Refresh tokens and dynamic client registration are not supported.
 
 IndieAuth makes authentication and scoped credentials available before Micropub is added.
 The published content model remains Markdown-first, and enabling IndieAuth does not move

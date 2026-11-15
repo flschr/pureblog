@@ -11,17 +11,17 @@
         "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/indieauth.php": "5f139218a5ed5d19ca8b4d62d5aac9ffacf9339aedd3bef3dea29c65015ddd88",
-        "includes/plus/indieauth-client.php": "3b5b5ba211e7dcf372c17e8fb31c734a9e55b007c87d21653a76a95040090f47",
+        "includes/plus/indieauth-client.php": "e5871813e11c62e9d28d1fd307722b28d9722680bcc63adf43b0d4edeb9c889f",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
-        "includes/plus/micropub.php": "a0d21ce08f81ad640f642a48c462ffa7f5bb880b8e5e6e6619dfd5926364d8f4",
-        "includes/plus/webmentions.php": "eeac36b91790a14cc9a310aa4dd2281e390664016b42bd13a9a60e4587f63bcb",
-        "includes/plus/webmention-sender.php": "0ae6f745e167721f6640ec05285f4bf831e90294d0b4c0b73a627ee6de5df051",
+        "includes/plus/micropub.php": "d7ac9640cc4319c83f2542a3561b76cd565b3c7506614d3b5a66df188d7bb2ef",
+        "includes/plus/webmentions.php": "242fd64a034304f7b0447cf08c30f7940228cf2c397b6805919d56005165e8ed",
+        "includes/plus/webmention-sender.php": "28b49c0969ea6e7bfc814b4cfc5760ea4cfd0f5e507c46a860e1056aa054813d",
         "indieauth/authorize.php": "4932114aac5c1acd6ec03369faee8c90c244fe674bc7a2dfe4901aedb83f17b5",
         "indieauth/metadata.php": "37bd70916cf6aa75596586c00211a053d184b54d3e803137a3e799f898a0b4c8",
         "indieauth/token.php": "be198c7fefcf750cb7d08159348f88d9a5777fc22ca722d51d9e4287b0ce02a2",
         "micropub/index.php": "630b27bc077aa141b4e566f69888ab640088f8495194b74385e417791c72a6ad",
         "micropub/media.php": "5514743392060efe6b5fedb7c7761ec68d44983fa65eedf7bee9d17c863f3612",
         "webmention/index.php": "af25bb550b72eca26cff9af60e2b0267f648f51a7748afa786b9ba9b70108458",
-        "admin/webmentions.php": "a859cbd5a417f227f3debb5b4858cdf4a2686aeb3039050830748f8c00e5a5e0"
+        "admin/webmentions.php": "39cbc78028ec837c665a53d2bc13348ca8c6284670dac5ade9f3053408723727"
     }
 }

@@ -163,14 +163,24 @@ function webmention_sender_get(int $id): ?array
     return is_array($delivery) ? $delivery : null;
 }
 
-function webmention_sender_list(?string $status = null): array
+function webmention_sender_list(?string $status = null, int $limit = 100, int $offset = 0): array
 {
+    if ($limit < 1 || $limit > 200 || $offset < 0) {
+        throw new InvalidArgumentException('Invalid Webmention delivery list range.');
+    }
     if ($status !== null) {
-        $query = plus_database()->prepare('SELECT * FROM plus_webmention_deliveries WHERE status=? ORDER BY updated_at DESC,id DESC');
-        $query->execute([$status]);
+        $query = plus_database()->prepare('SELECT * FROM plus_webmention_deliveries WHERE status=? ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?');
+        $query->bindValue(1, $status, PDO::PARAM_STR);
+        $query->bindValue(2, $limit, PDO::PARAM_INT);
+        $query->bindValue(3, $offset, PDO::PARAM_INT);
+        $query->execute();
         return $query->fetchAll() ?: [];
     }
-    return plus_database()->query('SELECT * FROM plus_webmention_deliveries ORDER BY updated_at DESC,id DESC')->fetchAll() ?: [];
+    $query = plus_database()->prepare('SELECT * FROM plus_webmention_deliveries ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?');
+    $query->bindValue(1, $limit, PDO::PARAM_INT);
+    $query->bindValue(2, $offset, PDO::PARAM_INT);
+    $query->execute();
+    return $query->fetchAll() ?: [];
 }
 
 function webmention_sender_retry(int $id, ?int $now = null): bool

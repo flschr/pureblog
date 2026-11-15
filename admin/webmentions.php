@@ -40,14 +40,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $filter = (string) ($_GET['status'] ?? '');
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$perPage = 50;
 if ($direction === 'outgoing') {
     $allowedFilters = ['queued', 'sent', 'unsupported', 'failed'];
-    $deliveries = webmention_sender_list(in_array($filter, $allowedFilters, true) ? $filter : null);
+    $deliveries = webmention_sender_list(in_array($filter, $allowedFilters, true) ? $filter : null, $perPage + 1, ($page - 1) * $perPage);
     $mentions = [];
 } else {
     $allowedFilters = ['pending', 'verified', 'rejected', 'invalid', 'deleted'];
-    $mentions = webmention_list(in_array($filter, $allowedFilters, true) ? $filter : null);
+    $mentions = webmention_list(in_array($filter, $allowedFilters, true) ? $filter : null, $perPage + 1, ($page - 1) * $perPage);
     $deliveries = [];
+}
+$items = $direction === 'outgoing' ? $deliveries : $mentions;
+$hasNextPage = count($items) > $perPage;
+if ($hasNextPage) {
+    array_pop($items);
+}
+if ($direction === 'outgoing') {
+    $deliveries = $items;
+} else {
+    $mentions = $items;
 }
 $adminTitle = t('admin.webmentions.page_title');
 require __DIR__ . '/../includes/admin-head.php';
@@ -106,5 +118,12 @@ require __DIR__ . '/../includes/admin-head.php';
                 </form>
             </article>
         <?php endforeach; ?>
+    <?php endif; ?>
+    <?php if ($page > 1 || $hasNextPage): ?>
+        <p>
+            <?php if ($page > 1): ?><a href="?direction=<?= e($direction) ?>&amp;status=<?= e($filter) ?>&amp;page=<?= $page - 1 ?>"><?= e(t('admin.webmentions.previous')) ?></a><?php endif; ?>
+            <?php if ($page > 1 && $hasNextPage): ?> · <?php endif; ?>
+            <?php if ($hasNextPage): ?><a href="?direction=<?= e($direction) ?>&amp;status=<?= e($filter) ?>&amp;page=<?= $page + 1 ?>"><?= e(t('admin.webmentions.next')) ?></a><?php endif; ?>
+        </p>
     <?php endif; ?>
 <?php require __DIR__ . '/../includes/admin-footer.php'; ?>

@@ -92,6 +92,7 @@ try {
     webmention_sender_schedule_targets('http://localhost/source', ['https://target.example/article'], 1001);
     $delivery = webmention_sender_list()[0] ?? null;
     sender_test_assert(is_array($delivery) && $delivery['status'] === 'queued', 'Queued delivery was not stored.');
+    sender_test_assert(count(webmention_sender_list(null, 1)) === 1, 'Delivery list limit was not applied.');
 
     $posted = [];
     $poster = static function (string $endpoint, array $form) use (&$posted): array {
