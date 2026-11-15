@@ -15,7 +15,9 @@ and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blo
 the local background-job queue used by optional protocols and connectors. The
 [release contract](docs/releases.md) describes versioning, package validation, and updates.
 The [IndieAuth server](docs/indieauth.md) lets compatible applications obtain narrowly
-scoped credentials through the existing admin login and MFA flow.
+scoped credentials through the existing admin login and MFA flow. The local
+[Micropub server](docs/micropub.md) uses those credentials to create, read, update, and
+delete Markdown posts and to upload media without a hosted publishing service.
 
 ## Pure Blog foundation
 
@@ -37,7 +39,7 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 - A standard web server (Apache or Nginx)
 - **Required PHP extensions:** `mbstring`, `xml`
 - **Recommended PHP extensions:** `curl`, `zip`
-- **Required for Plus protocols and connectors:** `pdo_sqlite`
+- **Required for Plus protocols and connectors:** `pdo_sqlite`, `fileinfo`
 - **Required for cross-origin IndieAuth clients:** `curl`
 - Write access to `/config`, `/content`, and `/data`
 

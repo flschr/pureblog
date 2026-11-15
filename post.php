@@ -33,7 +33,7 @@ $isAdminLoggedIn = is_admin_logged_in();
                 <?php render_layout_file($layoutFile, $post, $config, $adjacentPosts); ?>
             <?php else: ?>
             <article>
-                <h1><?= e($post['title']) ?></h1>
+                <?php if (!post_is_note($post)): ?><h1><?= e($post['title']) ?></h1><?php endif; ?>
                 <?php if ($post['date'] || !empty($config['show_reading_time'])): ?>
                     <p class="post-date">
                         <?php if ($post['date']): ?>
@@ -45,7 +45,8 @@ $isAdminLoggedIn = is_admin_logged_in();
                     </p>
                 <?php endif; ?>
 
-                <?= render_markdown($post['content'], ['post_title' => (string) ($post['title'] ?? '')]) ?>
+                <?= render_post_media($post) ?>
+                <?= render_post_content($post) ?>
                 <?= render_layout_partial('post-meta', [
                     'post' => $post,
                     'config' => $config,

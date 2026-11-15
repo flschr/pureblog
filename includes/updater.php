@@ -101,6 +101,12 @@ function pureblog_plus_protected_release_files(): array
         'includes/plus/indieauth.php',
         'includes/plus/indieauth-client.php',
         'includes/plus/indieauth-tokens.php',
+        'includes/plus/micropub.php',
+        'indieauth/authorize.php',
+        'indieauth/metadata.php',
+        'indieauth/token.php',
+        'micropub/index.php',
+        'micropub/media.php',
     ];
 }
 
