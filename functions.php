@@ -31,6 +31,10 @@ const PUREBLOG_CACHE_PATH = PUREBLOG_BASE_PATH . '/cache';
 const PUREBLOG_THEMES_PATH = PUREBLOG_BASE_PATH . '/content/themes';
 const PUREBLOG_CORE_THEMES_PATH = PUREBLOG_BASE_PATH . '/includes/themes';
 
+if (!defined('PUREBLOG_PLUS_DATA_PATH')) {
+    define('PUREBLOG_PLUS_DATA_PATH', PUREBLOG_DATA_PATH . '/plus');
+}
+
 function detect_pureblog_version(): string
 {
     if (!is_file(PUREBLOG_VERSION_FILE)) {
@@ -150,6 +154,7 @@ require __DIR__ . '/includes/lib/totp.php';
 require __DIR__ . '/includes/lib/qrcode.php';
 require __DIR__ . '/includes/lib/template.php';
 require __DIR__ . '/includes/lib/cache.php';
+require __DIR__ . '/includes/plus/runtime.php';
 
 
 $_userFunctions = PUREBLOG_BASE_PATH . '/content/functions.php';
