@@ -161,7 +161,15 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
     $kind = $name === '' ? 'note' : 'article';
     $statusValue = micropub_first_string($properties, 'post-status');
     $statusValue = $statusValue !== '' ? $statusValue : trim((string) ($commands['mp-post-status'] ?? ''));
-    $status = $statusValue === 'draft' ? 'draft' : 'published';
+    if ($statusValue === '' && $existing !== null) {
+        $status = (string) ($existing['status'] ?? 'draft');
+    } elseif ($statusValue === '') {
+        $status = 'published';
+    } elseif (in_array($statusValue, ['draft', 'published'], true)) {
+        $status = $statusValue;
+    } else {
+        throw new MicropubProtocolException('invalid_request', 'The post-status value is not supported.');
+    }
     $post = [
         'title' => $name !== '' ? $name : micropub_note_title($content, $published),
         'slug' => trim((string) ($commands['mp-slug'] ?? ($existing['slug'] ?? ''))),

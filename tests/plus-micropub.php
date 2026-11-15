@@ -79,6 +79,15 @@ try {
     micropub_test_assert($nativeMapped['layout'] === 'essay' && $nativeMapped['feature_image'] !== '', 'Native presentation fields were not preserved.');
     micropub_test_assert($nativeMapped['layout_fields']['custom_byline'] === 'Rene', 'Custom front matter was not preserved.');
 
+    $draftPost = array_replace($nativePost, ['status' => 'draft']);
+    $draftProperties = micropub_post_to_properties($draftPost);
+    unset($draftProperties['post-status']);
+    $draftMapped = micropub_properties_to_post($draftProperties, [], $draftPost);
+    micropub_test_assert($draftMapped['status'] === 'draft', 'Removing post-status unexpectedly published a draft.');
+    micropub_test_throws(static function (): void {
+        micropub_properties_to_post(['content' => ['Do not publish'], 'post-status' => ['unexpected']]);
+    }, 'invalid_request');
+
     micropub_test_throws(static function (): void {
         micropub_parse_create(['type' => ['h-entry'], 'properties' => ['content' => 'not-an-array']], true);
     }, 'invalid_request');
