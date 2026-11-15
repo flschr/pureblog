@@ -11,7 +11,7 @@
         "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/indieauth.php": "5f139218a5ed5d19ca8b4d62d5aac9ffacf9339aedd3bef3dea29c65015ddd88",
-        "includes/plus/indieauth-client.php": "e5871813e11c62e9d28d1fd307722b28d9722680bcc63adf43b0d4edeb9c889f",
+        "includes/plus/indieauth-client.php": "568fb5dfe6f8e3c3096cd29c9c6e8b1a746f349fe95aab34f473763bea613edc",
         "includes/plus/indieauth-tokens.php": "9be28cb48cbd627d07954e976522b58babccbc7ba453a44f43e89a9667a64a9d"
     }
 }
