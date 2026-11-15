@@ -28,12 +28,39 @@ function render_post_content(array $post): string
     $content = (string) ($post['content'] ?? '');
     if (($post['micropub_content_format'] ?? '') === 'text') {
         $paragraphs = preg_split('/\n{2,}/', trim($content)) ?: [];
-        return implode("\n", array_map(
+        $rendered = implode("\n", array_map(
             static fn(string $paragraph): string => '<p>' . nl2br(e($paragraph), false) . '</p>',
             $paragraphs
         ));
+        return render_post_relationships($post) . $rendered;
     }
-    return render_markdown($content, ['post_title' => (string) ($post['title'] ?? '')]);
+    return render_post_relationships($post) . render_markdown($content, ['post_title' => (string) ($post['title'] ?? '')]);
+}
+
+function render_post_relationships(array $post): string
+{
+    $links = [];
+    foreach ([
+        'in_reply_to' => ['u-in-reply-to', t('frontend.in_reply_to')],
+        'like_of' => ['u-like-of', t('frontend.like_of')],
+        'repost_of' => ['u-repost-of', t('frontend.repost_of')],
+    ] as $property => [$className, $label]) {
+        $raw = (string) ($post['micropub_' . $property] ?? '');
+        $values = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($values)) {
+            continue;
+        }
+        foreach ($values as $value) {
+            $url = is_string($value) ? $value : (is_array($value) ? (string) ($value['value'] ?? '') : '');
+            $parts = parse_url($url);
+            if (!is_array($parts) || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)) {
+                continue;
+            }
+            $host = (string) ($parts['host'] ?? $url);
+            $links[] = '<a class="' . $className . '" href="' . e($url) . '">' . e($label) . ' ' . e($host) . '</a>';
+        }
+    }
+    return $links === [] ? '' : '<p class="post-relationships">' . implode('<br>', $links) . '</p>';
 }
 
 function render_post_media(array $post): string

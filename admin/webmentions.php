@@ -8,42 +8,83 @@ $config = load_config();
 $fontStack = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
 $notice = '';
 $error = '';
+$direction = (string) ($_GET['direction'] ?? $_POST['direction'] ?? 'incoming');
+$direction = $direction === 'outgoing' ? 'outgoing' : 'incoming';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     verify_csrf();
-    $id = (int) ($_POST['webmention_id'] ?? 0);
     $action = (string) ($_POST['webmention_action'] ?? '');
-    if ($id < 1) {
-        $error = t('admin.webmentions.invalid');
-    } elseif (in_array($action, ['approved', 'rejected'], true)) {
-        if (webmention_moderate($id, $action)) {
-            $notice = $action === 'approved' ? t('admin.webmentions.approved') : t('admin.webmentions.rejected');
+    if ($direction === 'outgoing' && $action === 'retry') {
+        if (webmention_sender_retry((int) ($_POST['delivery_id'] ?? 0))) {
+            $notice = t('admin.webmentions.delivery_queued');
         } else {
             $error = t('admin.webmentions.invalid');
         }
-    } elseif ($action === 'verify' && webmention_get($id) !== null) {
-        webmention_enqueue_verification($id, time());
-        $notice = t('admin.webmentions.queued');
     } else {
-        $error = t('admin.webmentions.invalid');
+        $id = (int) ($_POST['webmention_id'] ?? 0);
+        if ($id < 1) {
+            $error = t('admin.webmentions.invalid');
+        } elseif (in_array($action, ['approved', 'rejected'], true)) {
+            if (webmention_moderate($id, $action)) {
+                $notice = $action === 'approved' ? t('admin.webmentions.approved') : t('admin.webmentions.rejected');
+            } else {
+                $error = t('admin.webmentions.invalid');
+            }
+        } elseif ($action === 'verify' && webmention_get($id) !== null) {
+            webmention_enqueue_verification($id, time());
+            $notice = t('admin.webmentions.queued');
+        } else {
+            $error = t('admin.webmentions.invalid');
+        }
     }
 }
 
 $filter = (string) ($_GET['status'] ?? '');
-$allowedFilters = ['pending', 'verified', 'approved', 'rejected', 'invalid', 'deleted'];
-$mentions = webmention_list(in_array($filter, $allowedFilters, true) ? $filter : null);
+if ($direction === 'outgoing') {
+    $allowedFilters = ['queued', 'sent', 'unsupported', 'failed'];
+    $deliveries = webmention_sender_list(in_array($filter, $allowedFilters, true) ? $filter : null);
+    $mentions = [];
+} else {
+    $allowedFilters = ['pending', 'verified', 'approved', 'rejected', 'invalid', 'deleted'];
+    $mentions = webmention_list(in_array($filter, $allowedFilters, true) ? $filter : null);
+    $deliveries = [];
+}
 $adminTitle = t('admin.webmentions.page_title');
 require __DIR__ . '/../includes/admin-head.php';
 ?>
     <h1><?= e(t('admin.webmentions.heading')) ?></h1>
     <p><?= e(t('admin.webmentions.intro')) ?></p>
+    <p>
+        <a href="?direction=incoming"><?= e(t('admin.webmentions.incoming')) ?></a> ·
+        <a href="?direction=outgoing"><?= e(t('admin.webmentions.outgoing')) ?></a>
+    </p>
     <?php if ($notice !== ''): ?><p class="notice"><?= e($notice) ?></p><?php endif; ?>
     <?php if ($error !== ''): ?><p class="notice delete"><?= e($error) ?></p><?php endif; ?>
     <p>
-        <a href="?status="><?= e(t('admin.webmentions.all')) ?></a>
-        <?php foreach ($allowedFilters as $status): ?> · <a href="?status=<?= e($status) ?>"><?= e(t('admin.webmentions.status_' . $status)) ?></a><?php endforeach; ?>
+        <a href="?direction=<?= e($direction) ?>&amp;status="><?= e(t('admin.webmentions.all')) ?></a>
+        <?php foreach ($allowedFilters as $status): ?> · <a href="?direction=<?= e($direction) ?>&amp;status=<?= e($status) ?>"><?= e(t('admin.webmentions.status_' . $status)) ?></a><?php endforeach; ?>
     </p>
-    <?php if ($mentions === []): ?>
+    <?php if ($direction === 'outgoing'): ?>
+        <?php if ($deliveries === []): ?>
+            <p><?= e(t('admin.webmentions.no_deliveries')) ?></p>
+        <?php else: ?>
+            <?php foreach ($deliveries as $delivery): ?>
+                <article class="notice">
+                    <p><strong><?= e(t('admin.webmentions.status_' . $delivery['status'])) ?></strong></p>
+                    <p><?= e(t('admin.webmentions.source')) ?>: <a href="<?= e((string) $delivery['source_url']) ?>" target="_blank" rel="noopener noreferrer"><?= e((string) $delivery['source_url']) ?></a></p>
+                    <p><?= e(t('admin.webmentions.target')) ?>: <a href="<?= e((string) $delivery['target_url']) ?>" target="_blank" rel="noopener noreferrer"><?= e((string) $delivery['target_url']) ?></a></p>
+                    <?php if ((string) $delivery['endpoint_url'] !== ''): ?><p><?= e(t('admin.webmentions.endpoint')) ?>: <?= e((string) $delivery['endpoint_url']) ?></p><?php endif; ?>
+                    <?php if ((string) $delivery['last_error'] !== ''): ?><p><?= e((string) $delivery['last_error']) ?></p><?php endif; ?>
+                    <form method="post" class="inline-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="direction" value="outgoing">
+                        <input type="hidden" name="delivery_id" value="<?= (int) $delivery['id'] ?>">
+                        <button type="submit" name="webmention_action" value="retry"><?= e(t('admin.webmentions.retry')) ?></button>
+                    </form>
+                </article>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    <?php elseif ($mentions === []): ?>
         <p><?= e(t('admin.webmentions.empty')) ?></p>
     <?php else: ?>
         <?php foreach ($mentions as $mention): ?>
@@ -54,6 +95,7 @@ require __DIR__ . '/../includes/admin-head.php';
                 <p><?= e(t('admin.webmentions.target')) ?>: <a href="<?= e((string) $mention['target_url']) ?>" target="_blank" rel="noopener noreferrer"><?= e((string) $mention['target_slug']) ?></a></p>
                 <form method="post" class="inline-form">
                     <?= csrf_field() ?>
+                    <input type="hidden" name="direction" value="incoming">
                     <input type="hidden" name="webmention_id" value="<?= (int) $mention['id'] ?>">
                     <?php if (in_array((string) $mention['status'], ['verified', 'approved', 'rejected'], true)): ?>
                         <button type="submit" name="webmention_action" value="approved"><?= e(t('admin.webmentions.approve')) ?></button>

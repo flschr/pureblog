@@ -1,4 +1,4 @@
-# Webmention receiver
+# Webmentions
 
 Pure Blog Plus advertises a local Webmention endpoint from every public page. Other sites
 can notify it when they link to a published post or page without involving a hosted
@@ -17,8 +17,26 @@ Verified mentions remain private until they are approved in **Admin → Webmenti
 Approved entries render as escaped text below their local post or page. Source links use
 `nofollow`, `ugc`, `noopener`, and `noreferrer`; remote HTML and images are never embedded.
 
-This component receives Webmentions only. Sending Webmentions for links published by the
-blog is a separate capability so both directions remain independently testable.
+Pure Blog Plus also sends Webmentions for external links in published posts and pages.
+Saving content only records local delivery jobs; endpoint discovery and network delivery
+run through the Plus job queue. Updates notify both current and previously recorded targets,
+so receivers can remove links that no longer exist. Renamed, unpublished, and deleted
+sources notify their previous targets as well.
+
+The local scheduler runs `php bin/plus-jobs.php` as described in the
+[Plus runtime](plus-runtime.md); no hosted queue is involved.
+
+Discovery follows the Webmention order: HTTP `Link` headers first, followed by HTML `link`
+and `a` elements. Relative endpoints and endpoint query parameters are preserved. Target
+fetches and endpoint posts use the same private-network, redirect, time, and size boundaries
+as incoming verification. Every `2xx` endpoint response counts as successful delivery.
+
+Incoming moderation and outgoing delivery status are available under **Admin →
+Webmentions**. Failed, queued, successful, and unsupported deliveries remain local and can
+be retried from the admin area.
+
+Micropub `in-reply-to`, `like-of`, and `repost-of` properties render as verifiable
+Microformats links on the public source page and participate in outgoing delivery.
 
 ## Verification
 
@@ -26,7 +44,10 @@ Run the isolated receiver contract with:
 
 ```sh
 php tests/plus-webmentions.php
+php tests/plus-webmention-sender.php
 ```
 
-The test covers lazy storage, URL and private-network rejection, verification, moderation,
-safe rendering, link removal, idempotent jobs, and request rate limits.
+The receiver test covers lazy storage, URL and private-network rejection, verification,
+moderation, safe rendering, link removal, idempotent jobs, and request rate limits. The
+sender test covers link extraction, endpoint precedence, redirects, form delivery, updates,
+manual retries, and private-network rejection.

@@ -18,8 +18,8 @@ The [IndieAuth server](docs/indieauth.md) lets compatible applications obtain na
 scoped credentials through the existing admin login and MFA flow. The local
 [Micropub server](docs/micropub.md) uses those credentials to create, read, update, and
 delete Markdown posts and to upload media without a hosted publishing service. The local
-[Webmention receiver](docs/webmentions.md) verifies and moderates reactions without an
-external Webmention or commenting service.
+[Webmention support](docs/webmentions.md) sends, verifies, moderates, and displays reactions
+without an external Webmention or commenting service.
 
 ## Pure Blog foundation
 
