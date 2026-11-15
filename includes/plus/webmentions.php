@@ -18,7 +18,7 @@ plus_register_migration('0003_webmentions', static function (PDO $database): voi
         . 'target_url TEXT NOT NULL,'
         . 'target_type TEXT NOT NULL CHECK (target_type IN (\'post\',\'page\')),'
         . 'target_slug TEXT NOT NULL,'
-        . 'status TEXT NOT NULL CHECK (status IN (\'pending\',\'verified\',\'approved\',\'rejected\',\'invalid\',\'deleted\')),'
+        . 'status TEXT NOT NULL CHECK (status IN (\'pending\',\'verified\',\'rejected\',\'invalid\',\'deleted\')),'
         . 'mention_type TEXT NOT NULL DEFAULT \'mention\','
         . 'author_name TEXT NOT NULL DEFAULT \'\','
         . 'author_url TEXT NOT NULL DEFAULT \'\','
@@ -27,7 +27,7 @@ plus_register_migration('0003_webmentions', static function (PDO $database): voi
         . 'excerpt TEXT NOT NULL DEFAULT \'\','
         . 'received_at INTEGER NOT NULL,'
         . 'verified_at INTEGER,'
-        . 'moderated_at INTEGER,'
+        . 'reviewed_at INTEGER,'
         . 'updated_at INTEGER NOT NULL,'
         . 'UNIQUE(source_url,target_url))'
     );
@@ -321,7 +321,7 @@ function webmention_mark_invalid(int $id, bool $deleted, ?int $now = null): void
     $query = $database->prepare('SELECT status FROM plus_webmentions WHERE id=?');
     $query->execute([$id]);
     $previous = (string) $query->fetchColumn();
-    $status = $deleted || in_array($previous, ['approved', 'verified'], true) ? 'deleted' : 'invalid';
+    $status = $deleted || in_array($previous, ['verified', 'rejected'], true) ? 'deleted' : 'invalid';
     $database->prepare('UPDATE plus_webmentions SET status=?,verified_at=?,updated_at=? WHERE id=?')->execute([$status, $now, $now, $id]);
     cache_clear();
 }
@@ -360,7 +360,7 @@ function webmention_verify(int $id, ?callable $fetcher = null, ?int $now = null)
         webmention_mark_invalid($id, false, $now);
         return;
     }
-    $status = in_array((string) $mention['status'], ['approved', 'rejected'], true) ? $mention['status'] : 'verified';
+    $status = (string) $mention['status'] === 'rejected' ? 'rejected' : 'verified';
     $update = $database->prepare(
         'UPDATE plus_webmentions SET status=?,mention_type=?,author_name=?,author_url=?,author_photo=?,source_title=?,excerpt=?,verified_at=?,updated_at=? WHERE id=?'
     );
@@ -378,12 +378,12 @@ function webmention_list(?string $status = null): array
     return plus_database()->query('SELECT * FROM plus_webmentions ORDER BY received_at DESC,id DESC')->fetchAll() ?: [];
 }
 
-function webmention_moderate(int $id, string $status, ?int $now = null): bool
+function webmention_review(int $id, string $status, ?int $now = null): bool
 {
-    if (!in_array($status, ['approved', 'rejected'], true)) {
-        throw new InvalidArgumentException('Invalid Webmention moderation status.');
+    if (!in_array($status, ['verified', 'rejected'], true)) {
+        throw new InvalidArgumentException('Invalid Webmention review status.');
     }
-    $update = plus_database()->prepare("UPDATE plus_webmentions SET status=?,moderated_at=?,updated_at=? WHERE id=? AND status IN ('verified','approved','rejected')");
+    $update = plus_database()->prepare("UPDATE plus_webmentions SET status=?,reviewed_at=?,updated_at=? WHERE id=? AND status IN ('verified','rejected')");
     $timestamp = $now ?? time();
     $update->execute([$status, $timestamp, $timestamp, $id]);
     if ($update->rowCount() === 1) {
@@ -391,39 +391,6 @@ function webmention_moderate(int $id, string $status, ?int $now = null): bool
         return true;
     }
     return false;
-}
-
-function webmention_approved_for(string $type, string $slug): array
-{
-    if (!is_file(plus_database_path())) {
-        return [];
-    }
-    $query = plus_database()->prepare("SELECT * FROM plus_webmentions WHERE target_type=? AND target_slug=? AND status='approved' ORDER BY verified_at ASC,id ASC");
-    $query->execute([$type, $slug]);
-    return $query->fetchAll() ?: [];
-}
-
-function render_webmentions(string $type, string $slug): string
-{
-    $mentions = webmention_approved_for($type, $slug);
-    if ($mentions === []) {
-        return '';
-    }
-    $items = [];
-    foreach ($mentions as $mention) {
-        $author = e((string) ($mention['author_name'] ?: parse_url((string) $mention['source_url'], PHP_URL_HOST)));
-        $source = e((string) $mention['source_url']);
-        $label = match ((string) $mention['mention_type']) {
-            'like' => t('frontend.webmention_liked'),
-            'repost' => t('frontend.webmention_reposted'),
-            'reply' => t('frontend.webmention_replied'),
-            default => t('frontend.webmention_mentioned'),
-        };
-        $excerpt = trim((string) $mention['excerpt']);
-        $items[] = '<li><a href="' . $source . '" rel="nofollow ugc noopener noreferrer">' . $author . '</a> ' . e($label)
-            . ($excerpt !== '' ? '<blockquote>' . e($excerpt) . '</blockquote>' : '') . '</li>';
-    }
-    return '<section class="webmentions"><h2>' . e(t('frontend.webmentions_heading')) . '</h2><ul>' . implode('', $items) . '</ul></section>';
 }
 
 plus_register_job_handler('webmention.verify', static function (array $payload): void {

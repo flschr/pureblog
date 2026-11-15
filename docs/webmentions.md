@@ -10,12 +10,13 @@ before source verification. Verification runs through the local Plus job queue.
 
 Source requests are limited to public HTTP and HTTPS addresses, with DNS pinning, bounded
 redirects, time and response-size limits. A source is valid only while the fetched document
-contains the exact target URL. Previously approved mentions whose link disappears are
-removed from public display.
+contains the exact target URL. Previously verified mentions whose link disappears remain
+recorded with a deleted status.
 
-Verified mentions remain private until they are approved in **Admin → Webmentions**.
-Approved entries render as escaped text below their local post or page. Source links use
-`nofollow`, `ugc`, `noopener`, and `noreferrer`; remote HTML and images are never embedded.
+Verified mentions remain private and are collected in **Admin → Webmentions**. The inbox
+can ignore an entry or restore it for later use, but Pure Blog Plus never renders incoming
+Webmentions on public posts or pages. Public comments and reactions belong to an optional
+PureComments integration, which is not part of this receiver.
 
 Pure Blog Plus also sends Webmentions for external links in published posts and pages.
 Saving content only records local delivery jobs; endpoint discovery and network delivery
@@ -31,7 +32,7 @@ and `a` elements. Relative endpoints and endpoint query parameters are preserved
 fetches and endpoint posts use the same private-network, redirect, time, and size boundaries
 as incoming verification. Every `2xx` endpoint response counts as successful delivery.
 
-Incoming moderation and outgoing delivery status are available under **Admin →
+The private incoming inbox and outgoing delivery status are available under **Admin →
 Webmentions**. Failed, queued, successful, and unsupported deliveries remain local and can
 be retried from the admin area.
 
@@ -48,6 +49,6 @@ php tests/plus-webmention-sender.php
 ```
 
 The receiver test covers lazy storage, URL and private-network rejection, verification,
-moderation, safe rendering, link removal, idempotent jobs, and request rate limits. The
+private inbox review, link removal, idempotent jobs, and request rate limits. The
 sender test covers link extraction, endpoint precedence, redirects, form delivery, updates,
 manual retries, and private-network rejection.
