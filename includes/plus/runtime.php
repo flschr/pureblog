@@ -8,5 +8,6 @@ require_once __DIR__ . '/jobs.php';
 require_once __DIR__ . '/job-runner.php';
 require_once __DIR__ . '/indieauth.php';
 require_once __DIR__ . '/micropub.php';
+require_once __DIR__ . '/webmentions.php';
 
 plus_register_capability('plus.runtime', 1, 0);

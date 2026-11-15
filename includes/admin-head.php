@@ -254,6 +254,9 @@ unset($_SESSION['admin_action_flash']);
                     <a href="<?= base_path() ?>/admin/images.php"<?= $adminPath === 'admin/images.php' ? ' class="current"' : '' ?> title="<?= e(t('admin.nav.images')) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg><span><?= e(t('admin.nav.images')) ?></span></a>
                 </li>
                 <li>
+                    <a href="<?= base_path() ?>/admin/webmentions.php"<?= $adminPath === 'admin/webmentions.php' ? ' class="current"' : '' ?> title="<?= e(t('admin.nav.webmentions')) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-globe"></use></svg><span><?= e(t('admin.nav.webmentions')) ?></span></a>
+                </li>
+                <li>
                     <a href="<?= base_path() ?>/admin/settings-site.php"<?= $isSettings ? ' class="current"' : '' ?> title="<?= e(t('admin.nav.settings')) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg><span><?= e(t('admin.nav.settings')) ?></span></a>
                     <?php if ($isSettings): ?>
                     <?php

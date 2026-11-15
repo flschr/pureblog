@@ -53,6 +53,11 @@ return [
         'edit_post'             => 'Edit post',
         'edit_page'             => 'Edit page',
         'reading_time'          => '{n} min read',
+        'webmentions_heading'   => 'Responses',
+        'webmention_liked'      => 'liked this',
+        'webmention_reposted'   => 'reposted this',
+        'webmention_replied'    => 'replied',
+        'webmention_mentioned'  => 'mentioned this',
     ],
 
     // -------------------------------------------------------------------------
@@ -64,6 +69,7 @@ return [
             'dashboard'     => 'Dashboard',
             'content'       => 'Content',
             'images'        => 'Images',
+            'webmentions'   => 'Webmentions',
             'settings'      => 'Settings',
             'view_site'     => 'View site',
             'clear_cache'   => 'Clear cache',
@@ -136,6 +142,28 @@ return [
             'approve'             => 'Approve',
             'deny'                => 'Deny',
             'error_scope_required'=> 'Select at least one supported permission or deny the request.',
+        ],
+
+        'webmentions' => [
+            'page_title'      => 'Webmentions - Pure Blog Plus',
+            'heading'         => 'Webmentions',
+            'intro'           => 'Verified reactions remain private until you approve them.',
+            'all'             => 'All',
+            'empty'           => 'No Webmentions found.',
+            'target'          => 'Target',
+            'approve'         => 'Approve',
+            'reject'          => 'Reject',
+            'verify'          => 'Verify again',
+            'approved'        => 'Webmention approved.',
+            'rejected'        => 'Webmention rejected.',
+            'queued'          => 'Webmention queued for verification.',
+            'invalid'         => 'The Webmention action could not be completed.',
+            'status_pending'  => 'Pending',
+            'status_verified' => 'Awaiting review',
+            'status_approved' => 'Approved',
+            'status_rejected' => 'Rejected',
+            'status_invalid'  => 'Invalid',
+            'status_deleted'  => 'Deleted',
         ],
 
         'content' => [

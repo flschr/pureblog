@@ -58,6 +58,7 @@ if ($featureImageRaw !== '') {
     <?php if (indieauth_server_available()): ?>
         <link rel="indieauth-metadata" href="<?= e(indieauth_endpoint_url('indieauth/metadata.php')) ?>">
         <link rel="micropub" href="<?= e(indieauth_endpoint_url('micropub/index.php')) ?>">
+        <link rel="webmention" href="<?= e(indieauth_endpoint_url('webmention/index.php')) ?>">
     <?php endif; ?>
     <?php if (!empty($config['assets']['favicon'])): ?>
         <?php $faviconHref = $config['assets']['favicon']; ?>

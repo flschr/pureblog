@@ -57,6 +57,7 @@ $isAdminLoggedIn = is_admin_logged_in();
                 ]) ?>
             </article>
             <?php endif; ?>
+            <?= render_webmentions('post', (string) ($post['slug'] ?? '')) ?>
         <?php endif; ?>
         <?php if ($isAdminLoggedIn): ?>
             <a class="admin-edit-link" href="<?= e(base_path() . '/admin/edit-post.php?slug=' . urlencode((string) ($post['slug'] ?? ''))) ?>">
