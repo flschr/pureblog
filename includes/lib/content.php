@@ -2,20 +2,164 @@
 
 declare(strict_types=1);
 
+function pureblog_with_content_mutation_lock(callable $mutation)
+{
+    static $handle = null;
+    static $depth = 0;
+
+    if ($depth > 0) {
+        $depth++;
+        try {
+            return $mutation();
+        } finally {
+            $depth--;
+        }
+    }
+
+    if (!is_dir(PUREBLOG_DATA_PATH)
+        && !mkdir(PUREBLOG_DATA_PATH, 0700, true)
+        && !is_dir(PUREBLOG_DATA_PATH)) {
+        throw new RuntimeException('Unable to create the Pure Blog data directory.');
+    }
+    $lockPath = PUREBLOG_DATA_PATH . '/content-mutations.lock';
+    $handle = fopen($lockPath, 'c');
+    if ($handle === false) {
+        throw new RuntimeException('Unable to open the content mutation lock.');
+    }
+    @chmod($lockPath, 0600);
+    if (!flock($handle, LOCK_EX)) {
+        fclose($handle);
+        $handle = null;
+        throw new RuntimeException('Unable to acquire the content mutation lock.');
+    }
+
+    $depth = 1;
+    try {
+        pureblog_cleanup_content_trash();
+        return $mutation();
+    } finally {
+        $depth = 0;
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        $handle = null;
+    }
+}
+
+function pureblog_atomic_write_file(string $path, string $contents): bool
+{
+    $directory = dirname($path);
+    if (!is_dir($directory)
+        && !mkdir($directory, 0755, true)
+        && !is_dir($directory)) {
+        return false;
+    }
+
+    try {
+        $suffix = bin2hex(random_bytes(8));
+    } catch (Throwable $error) {
+        return false;
+    }
+    $temporaryPath = $directory . '/.' . basename($path) . '.' . $suffix . '.tmp';
+    $stream = @fopen($temporaryPath, 'x+b');
+    if ($stream === false) {
+        return false;
+    }
+
+    $written = 0;
+    $complete = false;
+    $length = strlen($contents);
+    try {
+        while ($written < $length) {
+            $chunk = fwrite($stream, substr($contents, $written));
+            if ($chunk === false || $chunk === 0) {
+                return false;
+            }
+            $written += $chunk;
+        }
+        if (!fflush($stream)) {
+            return false;
+        }
+        if (function_exists('fsync') && !fsync($stream)) {
+            return false;
+        }
+        $complete = true;
+    } finally {
+        fclose($stream);
+        if (!$complete) {
+            @unlink($temporaryPath);
+        }
+    }
+
+    $permissions = is_file($path) ? (fileperms($path) & 0777) : 0644;
+    @chmod($temporaryPath, $permissions);
+    if (!@rename($temporaryPath, $path)) {
+        @unlink($temporaryPath);
+        return false;
+    }
+    clearstatcache(true, $path);
+    return true;
+}
+
+function pureblog_remove_tree(string $path): bool
+{
+    if (!file_exists($path)) return true;
+    if (is_file($path) || is_link($path)) return @unlink($path);
+    $items = scandir($path);
+    if ($items === false) return false;
+    $removed = true;
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') continue;
+        if (!pureblog_remove_tree($path . '/' . $item)) $removed = false;
+    }
+    return @rmdir($path) && $removed;
+}
+
+function pureblog_cleanup_content_trash(): void
+{
+    $trashDirectory = PUREBLOG_DATA_PATH . '/content-trash';
+    if (!is_dir($trashDirectory)) return;
+    foreach (scandir($trashDirectory) ?: [] as $item) {
+        if ($item === '.' || $item === '..') continue;
+        pureblog_remove_tree($trashDirectory . '/' . $item);
+    }
+    @rmdir($trashDirectory);
+}
+
+function pureblog_stage_content_delete(string $contentPath, string $imageDirectory): bool
+{
+    try {
+        $suffix = bin2hex(random_bytes(8));
+    } catch (Throwable) {
+        return false;
+    }
+    $trashDirectory = PUREBLOG_DATA_PATH . '/content-trash';
+    if (!is_dir($trashDirectory)
+        && !mkdir($trashDirectory, 0700, true)
+        && !is_dir($trashDirectory)) return false;
+    @chmod($trashDirectory, 0700);
+    $stagedContent = $trashDirectory . '/' . basename($contentPath) . '.' . $suffix;
+    $stagedImages = $trashDirectory . '/images-' . $suffix;
+    if (!rename($contentPath, $stagedContent)) return false;
+    if (is_dir($imageDirectory) && !rename($imageDirectory, $stagedImages)) {
+        @rename($stagedContent, $contentPath);
+        return false;
+    }
+    if (!pureblog_remove_tree($stagedContent) || !pureblog_remove_tree($stagedImages)) {
+        error_log('Pure Blog could not fully remove staged content trash.');
+    }
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Config admin helpers
 // ---------------------------------------------------------------------------
 
 function save_config(array $config): bool
 {
-    $data = "<?php\nreturn " . var_export($config, true) . ";\n";
-    $tmpPath = PUREBLOG_CONFIG_PATH . '.tmp';
-
-    if (file_put_contents($tmpPath, $data) === false) {
-        return false;
-    }
-
-    $saved = rename($tmpPath, PUREBLOG_CONFIG_PATH);
+    $saved = pureblog_with_content_mutation_lock(static function () use ($config): bool {
+        $data = "<?php\nreturn " . var_export($config, true) . ";\n";
+        return pureblog_atomic_write_file(PUREBLOG_CONFIG_PATH, $data);
+    });
     if ($saved) {
         clearstatcache(true, PUREBLOG_CONFIG_PATH);
         if (function_exists('opcache_invalidate')) {
@@ -107,6 +251,17 @@ function get_base_url(): string
     }
 
     return $scheme . '://' . $host . base_path();
+}
+
+function pureblog_valid_base_url(string $url): bool
+{
+    $parts = parse_url(trim($url));
+    if (!is_array($parts) || empty($parts['host']) || isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment'])) {
+        return false;
+    }
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host = strtolower((string) $parts['host']);
+    return $scheme === 'https' || ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1'], true));
 }
 
 function e(string $value): string
@@ -986,6 +1141,31 @@ function get_page_by_slug(string $slug, bool $includeDrafts = false): ?array
 
 function save_page(array &$page, ?string $originalSlug = null, ?string $originalStatus = null, ?string &$error = null): bool
 {
+    $saved = pureblog_with_content_mutation_lock(
+        static function () use (&$page, $originalSlug, $originalStatus, &$error): bool {
+            return save_page_locked($page, $originalSlug, $originalStatus, $error);
+        }
+    );
+    if (!$saved) return false;
+
+    $slug = (string) $page['slug'];
+    $status = (string) ($page['status'] ?? 'draft');
+    $wasPublished = $originalStatus === 'published';
+    if ($status === 'published') {
+        call_hook('on_page_updated', [$slug]);
+        if (!$wasPublished) call_hook('on_page_published', [$slug]);
+        if ($wasPublished && $originalSlug !== null && $originalSlug !== '' && $originalSlug !== $slug) {
+            call_hook('on_page_deleted', [$originalSlug]);
+        }
+    } elseif ($wasPublished) {
+        call_hook('on_page_deleted', [$slug]);
+    }
+    webmention_sender_content_saved('page', $page, $originalSlug, $originalStatus);
+    return true;
+}
+
+function save_page_locked(array &$page, ?string $originalSlug = null, ?string $originalStatus = null, ?string &$error = null): bool
+{
     $error = null;
     $title = trim($page['title'] ?? '');
     $slug = trim($page['slug'] ?? '');
@@ -1008,11 +1188,16 @@ function save_page(array &$page, ?string $originalSlug = null, ?string $original
     }
     $page['slug'] = $slug;
 
+    $renamedImageFolder = null;
     if ($originalSlug !== null && $originalSlug !== '' && $originalSlug !== $slug) {
         $oldImageFolder = PUREBLOG_BASE_PATH . '/content/images/' . $originalSlug;
         $newImageFolder = PUREBLOG_BASE_PATH . '/content/images/' . $slug;
         if (is_dir($oldImageFolder)) {
-            @rename($oldImageFolder, $newImageFolder);
+            if (file_exists($newImageFolder) || !rename($oldImageFolder, $newImageFolder)) {
+                $error = 'Unable to move the page image folder.';
+                return false;
+            }
+            $renamedImageFolder = [$newImageFolder, $oldImageFolder];
         }
 
         if (isset($page['content'])) {
@@ -1066,77 +1251,52 @@ function save_page(array &$page, ?string $originalSlug = null, ?string $original
         }
     }
 
-    if (file_put_contents($path, $body) === false) {
+    if (!pureblog_atomic_write_file($path, $body)) {
+        if ($renamedImageFolder !== null) {
+            @rename($renamedImageFolder[0], $renamedImageFolder[1]);
+        }
         $error = 'Unable to write page file.';
         return false;
     }
 
     if ($existingPath && $existingPath !== $path) {
         if (!unlink($existingPath)) {
+            @unlink($path);
+            if ($renamedImageFolder !== null) {
+                @rename($renamedImageFolder[0], $renamedImageFolder[1]);
+            }
             $error = 'Page saved, but could not remove the old file. Check permissions.';
             return false;
         }
     }
 
-    $wasPublished = ($originalStatus === 'published');
-    $isPublished = ($status === 'published');
-
-    if ($isPublished) {
-        call_hook('on_page_updated', [$slug]);
-        if (!$wasPublished) {
-            call_hook('on_page_published', [$slug]);
-        }
-        if ($wasPublished && $originalSlug !== null && $originalSlug !== '' && $originalSlug !== $slug) {
-            // Old URL can remain cached when a published page slug changes.
-            call_hook('on_page_deleted', [$originalSlug]);
-        }
-    } elseif ($wasPublished) {
-        // Page was removed from public output (unpublished).
-        call_hook('on_page_deleted', [$slug]);
-    }
-
     get_all_pages(true, true);
     build_search_index();
     cache_clear();
-    webmention_sender_content_saved('page', $page, $originalSlug, $originalStatus);
     return true;
 }
 
 function delete_page_by_slug(string $slug): bool
+{
+    $deleted = pureblog_with_content_mutation_lock(
+        static fn(): bool => delete_page_by_slug_locked($slug)
+    );
+    if ($deleted) webmention_sender_content_deleted('page', $slug);
+    return $deleted;
+}
+
+function delete_page_by_slug_locked(string $slug): bool
 {
     $path = PUREBLOG_PAGES_PATH . '/' . $slug . '.md';
     if (!is_file($path)) {
         return false;
     }
 
-    $deleted = unlink($path);
+    $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
+    $deleted = pureblog_stage_content_delete($path, $imageDir);
     if (!$deleted) {
         return false;
     }
-    webmention_sender_content_deleted('page', $slug);
-
-    $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
-    if (is_dir($imageDir)) {
-        $thumbDir = $imageDir . '/thumbs';
-        if (is_dir($thumbDir)) {
-            foreach (glob($thumbDir . '/*') ?: [] as $thumbFile) {
-                if (is_file($thumbFile)) {
-                    @unlink($thumbFile);
-                }
-            }
-            @rmdir($thumbDir);
-        }
-        $files = glob($imageDir . '/*') ?: [];
-        foreach ($files as $file) {
-            if (is_file($file) && !unlink($file)) {
-                return false;
-            }
-        }
-        if (!rmdir($imageDir)) {
-            return false;
-        }
-    }
-
     get_all_pages(true, true);
     build_search_index();
     cache_clear();
@@ -1144,6 +1304,13 @@ function delete_page_by_slug(string $slug): bool
 }
 
 function update_front_matter_field(string $filepath, string $field, string $value): bool
+{
+    return pureblog_with_content_mutation_lock(
+        static fn(): bool => update_front_matter_field_locked($filepath, $field, $value)
+    );
+}
+
+function update_front_matter_field_locked(string $filepath, string $field, string $value): bool
 {
     $raw = file_get_contents($filepath);
     if ($raw === false) {
@@ -1169,7 +1336,7 @@ function update_front_matter_field(string $filepath, string $field, string $valu
         $frontBlock = preg_replace($pattern, '', $frontBlock);
     }
 
-    return file_put_contents($filepath, $frontBlock . $body) !== false;
+    return pureblog_atomic_write_file($filepath, $frontBlock . $body);
 }
 
 function find_post_filepath_by_slug(string $slug): ?string
@@ -1184,40 +1351,30 @@ function find_post_filepath_by_slug(string $slug): ?string
 
 function delete_post_by_slug(string $slug): bool
 {
+    $deleted = pureblog_with_content_mutation_lock(
+        static fn(): bool => delete_post_by_slug_locked($slug)
+    );
+    if ($deleted) {
+        webmention_sender_content_deleted('post', $slug);
+        social_content_deleted($slug);
+        call_hook('on_post_deleted', [$slug]);
+    }
+    return $deleted;
+}
+
+function delete_post_by_slug_locked(string $slug): bool
+{
     $path = find_post_filepath_by_slug($slug);
     if ($path === null) {
         return false;
     }
 
-    $deleted = unlink($path);
+    $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
+    $deleted = pureblog_stage_content_delete($path, $imageDir);
     if ($deleted) {
-        webmention_sender_content_deleted('post', $slug);
-        social_content_deleted($slug);
-        $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
-        if (is_dir($imageDir)) {
-            $thumbDir = $imageDir . '/thumbs';
-            if (is_dir($thumbDir)) {
-                foreach (glob($thumbDir . '/*') ?: [] as $thumbFile) {
-                    if (is_file($thumbFile)) {
-                        @unlink($thumbFile);
-                    }
-                }
-                @rmdir($thumbDir);
-            }
-            $files = glob($imageDir . '/*') ?: [];
-            foreach ($files as $file) {
-                if (is_file($file) && !unlink($file)) {
-                    return false;
-                }
-            }
-            if (!rmdir($imageDir)) {
-                return false;
-            }
-        }
         build_search_index();
         build_tag_index();
         cache_clear();
-        call_hook('on_post_deleted', [$slug]);
     }
     return $deleted;
 }
@@ -1251,6 +1408,24 @@ function slug_in_use(string $slug, string $type, ?string $originalSlug = null): 
 
 function save_post(array &$post, ?string $originalSlug = null, ?string $originalDate = null, ?string $originalStatus = null, ?string &$error = null): bool
 {
+    $saved = pureblog_with_content_mutation_lock(
+        static function () use (&$post, $originalSlug, $originalDate, $originalStatus, &$error): bool {
+            return save_post_locked($post, $originalSlug, $originalDate, $originalStatus, $error);
+        }
+    );
+    if (!$saved) return false;
+    $slug = (string) $post['slug'];
+    if (($post['status'] ?? '') === 'published') {
+        call_hook('on_post_updated', [$slug]);
+        if ($originalStatus !== 'published') call_hook('on_post_published', [$slug]);
+    }
+    webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
+    social_content_saved($post, $originalSlug, $originalStatus);
+    return true;
+}
+
+function save_post_locked(array &$post, ?string $originalSlug = null, ?string $originalDate = null, ?string $originalStatus = null, ?string &$error = null): bool
+{
     $error = null;
     $title = trim($post['title'] ?? '');
     $slug = trim($post['slug'] ?? '');
@@ -1276,11 +1451,16 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     }
     $post['slug'] = $slug;
 
+    $renamedImageFolder = null;
     if ($originalSlug !== null && $originalSlug !== '' && $originalSlug !== $slug) {
         $oldImageFolder = PUREBLOG_BASE_PATH . '/content/images/' . $originalSlug;
         $newImageFolder = PUREBLOG_BASE_PATH . '/content/images/' . $slug;
         if (is_dir($oldImageFolder)) {
-            @rename($oldImageFolder, $newImageFolder);
+            if (file_exists($newImageFolder) || !rename($oldImageFolder, $newImageFolder)) {
+                $error = 'Unable to move the post image folder.';
+                return false;
+            }
+            $renamedImageFolder = [$newImageFolder, $oldImageFolder];
         }
 
         if (isset($post['content'])) {
@@ -1370,20 +1550,21 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
         }
     }
 
-    if ($renameFrom !== null) {
-        if (!rename($renameFrom, $path)) {
-            $error = 'Unable to rename post file after date change.';
-            return false;
+    if (!pureblog_atomic_write_file($path, $body)) {
+        if ($renamedImageFolder !== null) {
+            @rename($renamedImageFolder[0], $renamedImageFolder[1]);
         }
-    }
-
-    if (file_put_contents($path, $body) === false) {
         $error = 'Unable to write post file.';
         return false;
     }
 
-    if ($existingPath && $existingPath !== $path) {
-        if (!unlink($existingPath)) {
+    $oldPath = $existingPath ?? $renameFrom;
+    if ($oldPath && $oldPath !== $path) {
+        if (!unlink($oldPath)) {
+            @unlink($path);
+            if ($renamedImageFolder !== null) {
+                @rename($renamedImageFolder[0], $renamedImageFolder[1]);
+            }
             $error = 'Post saved, but could not remove the old file. Check permissions.';
             return false;
         }
@@ -1393,14 +1574,6 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     build_tag_index();
     cache_clear();
 
-    if ($status === 'published') {
-        call_hook('on_post_updated', [$slug]);
-        if ($originalStatus !== 'published') {
-            call_hook('on_post_published', [$slug]);
-        }
-    }
-    webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
-    social_content_saved($post, $originalSlug, $originalStatus);
     return true;
 }
 

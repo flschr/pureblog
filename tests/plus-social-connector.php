@@ -19,6 +19,7 @@ $root = sys_get_temp_dir() . '/pureblog-social-' . bin2hex(random_bytes(8));
 define('PUREBLOG_PLUS_DATA_PATH', $root . '/plus');
 $requests = [];
 $statusGeneration = 1;
+$revokeFails = false;
 
 try {
     require dirname(__DIR__) . '/functions.php';
@@ -27,7 +28,7 @@ try {
         if (str_contains($url, 'broken')) throw new RuntimeException('Synthetic archive failure.');
         return 'https://blog.example/content/media/social/' . hash('sha256', $url) . '.jpg';
     };
-    $GLOBALS['_pureblog_social_requester'] = static function (string $method, string $url, array $options) use (&$requests, &$statusGeneration): array {
+    $GLOBALS['_pureblog_social_requester'] = static function (string $method, string $url, array $options) use (&$requests, &$statusGeneration, &$revokeFails): array {
         $requests[] = [$method, $url, $options];
         $payload = [];
         if (str_ends_with($url, '/api/v1/apps')) {
@@ -35,6 +36,7 @@ try {
         } elseif (str_ends_with($url, '/oauth/token')) {
             $payload = ['access_token' => 'access-token'];
         } elseif (str_ends_with($url, '/oauth/revoke')) {
+            if ($revokeFails) return ['ok' => false, 'status' => 503, 'body' => '{}', 'headers' => [], 'error' => 'Synthetic revoke failure'];
             $payload = [];
         } elseif (str_ends_with($url, '/api/v1/accounts/verify_credentials')) {
             $payload = ['id' => 'account-1', 'acct' => 'rene@example.social', 'url' => 'https://example.social/@rene'];
@@ -82,6 +84,23 @@ try {
     $connection = social_complete_connection('code', (string) $authorizationQuery['state']);
     social_test_assert(social_connected($connection), 'OAuth connection was not persisted.');
     social_test_assert(count(social_syndication_targets()) === 1, 'Connected account was not advertised as a syndication target.');
+    $replacementAuthorization = social_begin_connection('https://example.social', 900);
+    parse_str((string) parse_url($replacementAuthorization, PHP_URL_QUERY), $replacementQuery);
+    social_test_assert(social_connected(), 'Starting a replacement discarded the active connection.');
+    try {
+        social_complete_connection('replacement-code', 'wrong-state', 901);
+        throw new RuntimeException('Invalid replacement OAuth state was accepted.');
+    } catch (RuntimeException $error) {
+        social_test_assert(str_contains($error->getMessage(), 'missing or expired'), 'Unexpected replacement OAuth state error.');
+    }
+    social_test_assert(social_connected(), 'Failed replacement discarded the active connection.');
+    $connection = social_complete_connection('replacement-code', (string) ($replacementQuery['state'] ?? ''), 902);
+    social_test_assert(social_connected($connection), 'Validated replacement connection was not activated.');
+    $staleRequestCount = count($requests);
+    ($GLOBALS['_pureblog_plus_job_handlers']['social.announce'])([
+        'slug' => 'stale-post', 'action' => 'publish', 'archive_id' => social_active_archive_id() + 1,
+    ]);
+    social_test_assert(count($requests) === $staleRequestCount, 'A stale account-bound announcement job reached the API.');
 
     social_test_assert(social_sync(1000) === 2, 'Initial status synchronization count is wrong.');
     $statuses = social_statuses();
@@ -91,11 +110,14 @@ try {
     $archivedMedia = json_decode((string) $statuses[0]['media_json'], true);
     social_test_assert(social_media_is_referenced((string) $archivedMedia[0]['url']), 'Social projection did not protect archived media from deletion.');
     social_test_assert($statuses[1]['media_json'] === '[]', 'A media failure removed its status or retained the remote URL.');
+    plus_database()->prepare('INSERT INTO plus_social_media (archive_id,remote_url,local_url,created_at) VALUES (?,?,?,?)')
+        ->execute([social_active_archive_id(), 'https://media.example/stale.jpg', 'https://blog.example/content/media/social/stale.jpg', 1000]);
 
     $statusGeneration = 2;
     social_test_assert(social_sync(1300) === 1, 'Updated status synchronization count is wrong.');
     $statuses = social_statuses();
     social_test_assert(count($statuses) === 1 && $statuses[0]['content_text'] === 'Edited status', 'Remote updates and deletions were not reconciled.');
+    social_test_assert((int) plus_database()->query('SELECT COUNT(*) FROM plus_social_media')->fetchColumn() === 0, 'Unreferenced social media mapping was not evicted.');
 
     $announcementRequestCount = count($requests);
     social_publish_announcement('new-post', 'New post', null, null, 1300);
@@ -107,16 +129,22 @@ try {
     social_publish_announcement('new-post', 'Renamed post', $announcement, null, 1302);
     social_test_assert(count($requests) === $announcementRequestCount + 2 && $requests[array_key_last($requests)][0] === 'PUT', 'Changed announcement was not updated in place.');
 
-    plus_database()->prepare('INSERT INTO plus_social_announcements (post_slug,remote_id,remote_url,content_hash,updated_at) VALUES (?,?,?,?,?)')
-        ->execute(['post', 'announcement-1', 'https://example.social/@rene/announcement-1', 'hash', 1300]);
-    social_run_announcement('post', 'delete', 1301);
+    plus_database()->prepare('INSERT INTO plus_social_announcements (archive_id,post_slug,remote_id,remote_url,content_hash,updated_at) VALUES (?,?,?,?,?,?)')
+        ->execute([social_active_archive_id(), 'post', 'announcement-1', 'https://example.social/@rene/announcement-1', 'hash', 1300]);
+    social_run_announcement('post', 'delete', 1301, social_active_archive_id());
     social_test_assert(social_announcement_record('post') === null, 'Deleted announcement mapping remains.');
 
+    $revokeFails = true;
     social_disconnect(1400);
     $requestCount = count($requests);
     social_test_assert(!social_connected(), 'Disconnect retained active credentials.');
     social_test_assert(count(social_statuses()) === 1, 'Disconnect removed the frozen projection.');
     social_test_assert(social_sync(1500) === 0 && count($requests) === $requestCount, 'Disconnected archive continued polling.');
+    social_test_assert((int) plus_database()->query('SELECT COUNT(*) FROM plus_social_revocations')->fetchColumn() === 1, 'Failed token revocation was discarded.');
+    $revokeFails = false;
+    $revocationId = (int) plus_database()->query('SELECT id FROM plus_social_revocations')->fetchColumn();
+    social_retry_revocation($revocationId);
+    social_test_assert((int) plus_database()->query('SELECT COUNT(*) FROM plus_social_revocations')->fetchColumn() === 0, 'Deferred token revocation did not complete.');
 
     $reconnectAuthorization = social_begin_connection('https://example.social', 1600);
     parse_str((string) parse_url($reconnectAuthorization, PHP_URL_QUERY), $reconnectQuery);

@@ -10,7 +10,14 @@ The owner enters the HTTPS server origin under **Settings → Social** and autho
 Blog through OAuth. Dynamic app registration and the standard Mastodon-compatible API are
 used with the narrow `read:accounts`, `read:statuses`, and `write:statuses` scopes. Client
 credentials and the access token are stored in the private Plus SQLite database. Disconnect
-attempts to revoke the remote token and always removes the local credentials.
+attempts to revoke the remote token and always removes the active local connection. If the
+server is temporarily unavailable, the revocation credential is isolated in a private retry
+record until a background job confirms revocation.
+
+Starting a new authorization does not disturb the active account. Pure Blog verifies the new
+token and account before switching. Each connected account has its own archive identity;
+previous projections remain frozen, and queued sync or announcement jobs are bound to the
+identity that created them so they cannot run against a later account.
 
 ## Local microblog projection
 
@@ -19,7 +26,8 @@ original statuses are stored as a read-only local projection; replies, boosts, p
 and statuses created as Pure Blog announcements are excluded. Remote edits and deletions are
 reconciled only after a complete successful poll. Supported image, video, and audio attachments are copied through the
 selected Pure Blog media provider, so the public projection does not depend on remote media
-URLs. A failed image copy does not discard its status.
+URLs. A failed image copy does not discard its status. Copied media that is no longer referenced
+after a successful reconciliation is removed through the normal retryable media-deletion path.
 
 Enable the public projection to make it available at `/social`. Navigation remains under the
 site owner's control through the normal navigation settings. Disconnecting stops polling but

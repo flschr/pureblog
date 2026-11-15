@@ -45,28 +45,25 @@ if (!validate_image_path($baseDir, $targetFile)) {
     exit;
 }
 
-if (!is_file($targetFile)) {
+$deleteResult = pureblog_with_content_mutation_lock(static function () use ($targetFile, $targetDir, $filename): string {
+    if (!is_file($targetFile)) return 'not_found';
+    if (!unlink($targetFile)) return 'failed';
+    $thumbFile = $targetDir . '/thumbs/' . basename($filename);
+    if (is_file($thumbFile)) @unlink($thumbFile);
+    $thumbDir = $targetDir . '/thumbs';
+    if (is_dir($thumbDir) && !(glob($thumbDir . '/*') ?: [])) @rmdir($thumbDir);
+    if (!(glob($targetDir . '/*') ?: [])) @rmdir($targetDir);
+    return 'deleted';
+});
+
+if ($deleteResult === 'not_found') {
     header('Location: ' . $redirect . '&upload_error=' . urlencode(t('admin.editor.error_image_not_found')));
     exit;
 }
 
-if (!unlink($targetFile)) {
+if ($deleteResult !== 'deleted') {
     header('Location: ' . $redirect . '&upload_error=' . urlencode(t('admin.editor.error_delete_failed')));
     exit;
-}
-
-$thumbFile = $targetDir . '/thumbs/' . basename($filename);
-if (is_file($thumbFile)) {
-    @unlink($thumbFile);
-}
-$thumbDir = $targetDir . '/thumbs';
-if (is_dir($thumbDir) && !(glob($thumbDir . '/*') ?: [])) {
-    @rmdir($thumbDir);
-}
-
-$remaining = glob($targetDir . '/*') ?: [];
-if (!$remaining) {
-    @rmdir($targetDir);
 }
 
 header('Location: ' . $redirect);

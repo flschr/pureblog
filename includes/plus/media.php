@@ -23,6 +23,10 @@ plus_register_migration('0006_media_default_alt', static function (PDO $database
     $database->exec("ALTER TABLE plus_media ADD COLUMN default_alt TEXT NOT NULL DEFAULT ''");
 });
 
+plus_register_migration('0009_media_delete_state', static function (PDO $database): void {
+    $database->exec("ALTER TABLE plus_media ADD COLUMN delete_state TEXT NOT NULL DEFAULT 'active' CHECK (delete_state IN ('active','deleting'))");
+});
+
 /** @return array<string,string> */
 function plus_media_types(): array
 {
@@ -339,6 +343,7 @@ function plus_delete_media(string $id): bool
     $plugin = plus_plugins()[(string) $media['provider_id']] ?? null;
     $handler = $plugin['capabilities']['media.delete'] ?? null;
     if (!is_callable($handler)) throw new RuntimeException('Media provider cannot delete this asset.');
+    plus_database()->prepare("UPDATE plus_media SET delete_state='deleting' WHERE id=?")->execute([$id]);
     $handler($media, plus_plugin_settings((string) $media['provider_id']));
     $source = (string) $media['local_source'];
     if (is_file($source) && !unlink($source)) throw new RuntimeException('Private media source could not be deleted.');

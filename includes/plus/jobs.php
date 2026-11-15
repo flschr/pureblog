@@ -200,6 +200,32 @@ function plus_finish_job(
     }
 }
 
+/** @return array{succeeded:int,failed:int} */
+function plus_prune_jobs(
+    ?int $now = null,
+    int $succeededRetention = 2592000,
+    int $failedRetention = 15552000
+): array {
+    $now ??= time();
+    if ($succeededRetention < 86400 || $failedRetention < $succeededRetention) {
+        throw new InvalidArgumentException('Invalid Plus job retention.');
+    }
+    $database = plus_database();
+    $database->exec('BEGIN IMMEDIATE');
+    try {
+        $succeeded = $database->prepare("DELETE FROM plus_jobs WHERE state='succeeded' AND updated_at < ?");
+        $succeeded->execute([$now - $succeededRetention]);
+        $failed = $database->prepare("DELETE FROM plus_jobs WHERE state='failed' AND updated_at < ?");
+        $failed->execute([$now - $failedRetention]);
+        $result = ['succeeded' => $succeeded->rowCount(), 'failed' => $failed->rowCount()];
+        $database->exec('COMMIT');
+        return $result;
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->exec('ROLLBACK');
+        throw $error;
+    }
+}
+
 /**
  * @param array<string, mixed> $job
  * @return array<string, mixed>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 /** @var array<string, callable(array, array):void> */
 $GLOBALS['_pureblog_plus_job_handlers'] ??= [];
+$GLOBALS['_pureblog_plus_job_heartbeat'] ??= null;
 
 function plus_register_job_handler(string $type, callable $handler): void
 {
@@ -17,7 +18,13 @@ function plus_register_job_handler(string $type, callable $handler): void
 /**
  * @return array{claimed:int,succeeded:int,failed:int}
  */
-function plus_run_due_jobs(string $workerId, int $limit = 10, int $leaseSeconds = 60): array
+function plus_job_heartbeat(): void
+{
+    $heartbeat = $GLOBALS['_pureblog_plus_job_heartbeat'] ?? null;
+    if (is_callable($heartbeat)) $heartbeat();
+}
+
+function plus_run_due_jobs(string $workerId, int $limit = 10, int $leaseSeconds = 300): array
 {
     if ($limit < 1 || $limit > 1000) {
         throw new InvalidArgumentException('Plus job limit must be between 1 and 1000.');
@@ -35,14 +42,23 @@ function plus_run_due_jobs(string $workerId, int $limit = 10, int $leaseSeconds 
             if (!is_callable($handler)) {
                 throw new RuntimeException('No Plus job handler registered for: ' . $job['type']);
             }
+            $heartbeat = static function () use ($job, $workerId, $leaseSeconds): void {
+                plus_extend_job_lease((int) $job['id'], $workerId, $leaseSeconds);
+            };
+            $GLOBALS['_pureblog_plus_job_heartbeat'] = $heartbeat;
+            $heartbeat();
             $handler($job['payload'], $job);
+            $heartbeat();
             plus_complete_job((int) $job['id'], $workerId);
             $result['succeeded']++;
         } catch (Throwable $error) {
             $delay = min(3600, 30 * (2 ** max(0, (int) $job['attempts'] - 1)));
             plus_fail_job((int) $job['id'], $workerId, $error->getMessage(), time() + $delay);
             $result['failed']++;
+        } finally {
+            $GLOBALS['_pureblog_plus_job_heartbeat'] = null;
         }
     }
+    plus_prune_jobs();
     return $result;
 }

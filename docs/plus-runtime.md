@@ -37,6 +37,11 @@ The `plus_jobs` queue provides:
 - bounded attempts and exponential retry scheduling
 - permanent failure after the configured final attempt
 
+Workers use a five-minute lease by default. Long connector loops renew ownership between
+bounded network and media operations. A worker that loses ownership cannot complete or retry
+the job. Successful jobs are retained for 30 days and failed jobs for 180 days, after which the
+worker prunes them transactionally.
+
 Job handlers are ordinary local PHP callables. A scheduler invokes:
 
 ```sh

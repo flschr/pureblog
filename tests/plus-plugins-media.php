@@ -63,6 +63,10 @@ try {
         str_ends_with($signed['authorization'], 'Signature=870056166f61a9146a2c923f83330499bbb0ce947c809a7300cac266fa3735e5'),
         'S3 Signature Version 4 contract changed.'
     );
+    $s3PluginSource = file_get_contents(dirname(__DIR__) . '/includes/plugins/s3-media.php');
+    plugin_media_assert(is_string($s3PluginSource) && !str_contains($s3PluginSource, 'file_get_contents((string) $file[\'path\'])'), 'S3 uploads still buffer complete media files.');
+    $altPluginSource = file_get_contents(dirname(__DIR__) . '/includes/plugins/openai-alt-text.php');
+    plugin_media_assert(is_string($altPluginSource) && !str_contains($altPluginSource, 'base64_encode'), 'Alt-text requests still duplicate complete images in memory.');
     $invalidPrepared = plus_prepare_plugin_configuration(default_config(), [
         'provider' => ['media.storage' => 's3-media', 'media.alt_suggestion' => ''],
         'settings' => ['s3-media' => ['endpoint' => 'http://private.test']],
@@ -145,6 +149,33 @@ try {
     } catch (InvalidArgumentException) {
     }
     plugin_media_assert(is_file($unsupported), 'Rejected upload was moved into media storage.');
+
+    $deleteAttempts = 0;
+    $GLOBALS['_pureblog_test_delete_handler'] = static function () use (&$deleteAttempts): void {
+        $deleteAttempts++;
+        if ($deleteAttempts === 1) throw new RuntimeException('Synthetic provider delete failure.');
+    };
+    plus_register_plugin([
+        'id' => 'test-delete', 'name' => 'Test delete', 'version' => '1.0.0',
+        'api_version' => PUREBLOG_PLUGIN_API_VERSION,
+        'capabilities' => ['media.delete' => $GLOBALS['_pureblog_test_delete_handler']], 'settings' => [],
+    ]);
+    $retrySource = $root . '/retry-source.jpg';
+    file_put_contents($retrySource, 'retry');
+    $retryId = bin2hex(random_bytes(16));
+    plus_database()->prepare(
+        'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,variants_json,provider_data_json,local_source,created_at) '
+        . 'VALUES (?,?,?,?,?,?,?,?,?)'
+    )->execute([$retryId, 'test-delete', 'https://media.example.test/retry.jpg', 'image/jpeg', 'retry.jpg', '{}', '{}', $retrySource, time()]);
+    try {
+        plus_delete_media($retryId);
+        throw new RuntimeException('Synthetic provider deletion did not fail.');
+    } catch (RuntimeException $error) {
+        plugin_media_assert(str_contains($error->getMessage(), 'Synthetic'), 'Unexpected provider deletion error.');
+    }
+    plugin_media_assert(plus_media_by_id($retryId)['delete_state'] === 'deleting', 'Failed deletion was not retained as retryable state.');
+    plugin_media_assert(plus_delete_media($retryId), 'Retryable media deletion did not complete.');
+    unset($GLOBALS['_pureblog_test_delete_handler']);
 
     plugin_media_assert(plus_delete_media($media['id']), 'Managed media could not be deleted.');
     plugin_media_assert(plus_media_by_url($media['url']) === null, 'Deleted media record remains.');
