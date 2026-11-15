@@ -59,6 +59,10 @@ try {
         indieauth_resolve_url_reference('https://client.example/apps/editor?old=1', '?new=1') === 'https://client.example/apps/editor?new=1',
         'Query-only URL reference was not resolved.'
     );
+    indieauth_test_assert(
+        indieauth_resolve_url_reference('https://client.example/apps/editor', '../callback/') === 'https://client.example/callback/',
+        'Trailing slash was lost while resolving a relative URL.'
+    );
 
     start_admin_session();
     set_admin_login_return_path('/indieauth/authorize.php');
