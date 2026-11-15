@@ -155,13 +155,13 @@ if ($cacheAge > 21600) {
     $release = fetch_latest_pureblog_release();
     if ($release['ok'] && $release['tag'] !== '') {
         $latestVersion = $release['tag'];
-        @file_put_contents($versionCacheFile, $latestVersion);
     }
+    @file_put_contents($versionCacheFile, $latestVersion);
 } else {
     $cached = @file_get_contents($versionCacheFile);
     $latestVersion = is_string($cached) ? trim($cached) : '';
 }
-$updateAvailable = $latestVersion !== '' && $currentVersion !== 'unknown' && version_compare(ltrim($currentVersion, 'vV'), ltrim($latestVersion, 'vV'), '<');
+$updateAvailable = $latestVersion !== '' && pureblog_plus_update_available($currentVersion, $latestVersion);
 
 $fontStack  = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
 $adminTitle = t('admin.dashboard.page_title');

@@ -11,8 +11,10 @@ $config = load_config();
 $fontStack = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
 
 $latest = null;
+$latestUpstream = null;
 if (isset($_GET['check']) || isset($_GET['package_plan'])) {
     $latest = fetch_latest_pureblog_release();
+    $latestUpstream = fetch_latest_upstream_release();
 }
 $currentVersionDisplay = detect_current_pureblog_version();
 $packagePlan = null;
@@ -24,14 +26,17 @@ if (isset($_GET['package_plan'])) {
         $latestTag = (string) ($latest['tag'] ?? '');
         $currentVersion = detect_current_pureblog_version();
 
-        if ($latestTag !== '' && version_compare(ltrim($currentVersion, 'vV'), ltrim($latestTag, 'vV'), '>=')) {
+        if ($latestTag !== '' && !pureblog_plus_update_available($currentVersion, $latestTag)) {
             $packagePlan = [
                 'ok' => true,
                 'already_latest' => true,
                 'message' => t('admin.settings.updates.already_latest_version', ['tag' => $latestTag]),
             ];
         } else {
-            $packagePlan = build_package_upgrade_plan((string) ($latest['zipball_url'] ?? ''));
+            $packagePlan = build_package_upgrade_plan(
+                (string) ($latest['zipball_url'] ?? ''),
+                $latestTag
+            );
             if (!($packagePlan['ok'] ?? false)) {
                 $packagePlanError = (string) ($packagePlan['error'] ?? t('admin.settings.updates.error_build_plan'));
             }
@@ -110,7 +115,7 @@ require __DIR__ . '/../includes/admin-head.php';
                     (<code><?= e($latestBackup) ?></code>)
                 </p>
             <?php endif; ?>
-            <p><strong><?= e(t('admin.settings.updates.repository')) ?></strong> <a href="https://github.com/kevquirk/pureblog" target="_blank" rel="noopener noreferrer">github.com/kevquirk/pureblog</a></p>
+            <p><strong><?= e(t('admin.settings.updates.repository')) ?></strong> <a href="https://github.com/flschr/pureblog" target="_blank" rel="noopener noreferrer">github.com/flschr/pureblog</a></p>
             <p>
                 <a class="button" href="<?= base_path() ?>/admin/settings-updates.php?check=1">
                     <svg class="icon" aria-hidden="true"><use href="#icon-upgrade"></use></svg>
@@ -130,7 +135,7 @@ require __DIR__ . '/../includes/admin-head.php';
                 <?php
                 $latestTag = (string) ($latest['tag'] ?? '');
                 $currentVersion = detect_current_pureblog_version();
-                $updateAvailable = ($latestTag !== '' && $currentVersion !== 'unknown' && !versions_match($currentVersion, $latestTag));
+                $updateAvailable = ($latestTag !== '' && pureblog_plus_update_available($currentVersion, $latestTag));
                 $displayLatestVersion = ltrim($latestTag, 'v');
                 ?>
                 <?php if ($updateAvailable): ?>
@@ -140,7 +145,20 @@ require __DIR__ . '/../includes/admin-head.php';
                 <?php if (($latest['published_at'] ?? '') !== ''): ?>
                     <p><strong><?= e(t('admin.settings.updates.published')) ?></strong> <?= e(format_datetime_for_display((string) $latest['published_at'], $config, 'Y-m-d')) ?></p>
                 <?php endif; ?>
-                <p><a href="<?= e($latest['url'] ?? 'https://github.com/kevquirk/pureblog/releases') ?>" target="_blank" rel="noopener noreferrer"><?= e(t('admin.settings.updates.view_release_notes')) ?></a></p>
+                <p><a href="<?= e($latest['url'] ?? PUREBLOG_PLUS_RELEASES_URL) ?>" target="_blank" rel="noopener noreferrer"><?= e(t('admin.settings.updates.view_release_notes')) ?></a></p>
+            <?php endif; ?>
+
+            <?php if ($latestUpstream !== null && ($latestUpstream['ok'] ?? false)): ?>
+                <?php
+                $currentPlus = parse_pureblog_plus_version($currentVersionDisplay);
+                $upstreamTag = (string) ($latestUpstream['tag'] ?? '');
+                $upstreamVersion = ltrim($upstreamTag, 'vV');
+                ?>
+                <?php if ($currentPlus !== null && version_compare($currentPlus['upstream'], $upstreamVersion, '<')): ?>
+                    <p class="notice"><?= e(t('admin.settings.updates.upstream_available_hint', ['tag' => $upstreamTag])) ?>
+                        <a href="<?= e((string) ($latestUpstream['url'] ?? PUREBLOG_UPSTREAM_RELEASES_URL)) ?>" target="_blank" rel="noopener noreferrer"><?= e(t('admin.settings.updates.view_upstream_release')) ?></a>
+                    </p>
+                <?php endif; ?>
             <?php endif; ?>
         </section>
 
@@ -161,7 +179,7 @@ require __DIR__ . '/../includes/admin-head.php';
                 <?php if (($packagePlan['breaking_instructions'] ?? '') !== ''): ?>
                     <p><?= e((string) $packagePlan['breaking_instructions']) ?></p>
                 <?php endif; ?>
-                <p><a class="button" href="https://github.com/kevquirk/pureblog/releases" target="_blank" rel="noopener noreferrer">Download from GitHub</a></p>
+                <p><a class="button" href="<?= PUREBLOG_PLUS_RELEASES_URL ?>" target="_blank" rel="noopener noreferrer">Download from GitHub</a></p>
             <?php else: ?>
             <p><strong><?= e(t('admin.settings.updates.planned_actions')) ?></strong></p>
             <ul>

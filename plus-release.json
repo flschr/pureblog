@@ -1,0 +1,14 @@
+{
+    "schema": 1,
+    "product": "pureblog-plus",
+    "version": "3.9.2-plus.0",
+    "upstream": "3.9.2",
+    "protected_files": {
+        "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
+        "includes/plus/runtime.php": "a0d43b6a1052e187babc0e922495b395ec71087b14f3b6b430cdf585c8c8589d",
+        "includes/plus/migrations.php": "2167a4942ed928ac298f6708a9b17a776a41c7e712b81b2f315e65cca33fb088",
+        "includes/plus/jobs.php": "54dbfe508a8d875815ebf65f8a202b1fc71f8c3e0db71ee21832902bbfdb48b6",
+        "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
+        "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0"
+    }
+}

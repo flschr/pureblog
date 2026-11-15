@@ -37,5 +37,5 @@ updates requires an explicit review of the corresponding Plus owner before relea
 - Releases retain the Pure Blog license and make the upstream relationship visible.
 
 Plus releases use tags such as `v3.9.2-plus.1`, which identify both the integrated Pure Blog
-baseline and the Plus release. The upstream `VERSION` value stays unchanged until the first
-actual Plus release is prepared and verified.
+baseline and the Plus release. Pure Blog releases are integration inputs and are never applied
+directly to a Plus installation. See [the release contract](releases.md).
