@@ -43,6 +43,7 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
         throw new InvalidArgumentException('A complete file upload is required.');
     }
     $temporary = (string) ($file['tmp_name'] ?? '');
+    $uploadTemporary = $temporary;
     $size = is_file($temporary) ? filesize($temporary) : false;
     if ($temporary === '' || $size === false || $size <= 0 || $size > 104857600) {
         throw new InvalidArgumentException('The file is empty or exceeds 100 MB.');
@@ -50,10 +51,27 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
     if ($requireUploadedFile && !is_uploaded_file($temporary)) {
         throw new InvalidArgumentException('The upload source is not valid.');
     }
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporary) ?: '';
+    $mimeDetector = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $mimeDetector->file($temporary) ?: '';
     $types = plus_media_types();
     if (!isset($types[$mime])) {
-        throw new InvalidArgumentException('The file type is not supported.');
+        $prepared = apply_filter('on_prepare_media_upload', [
+            'path' => $temporary,
+            'name' => (string) ($file['name'] ?? ''),
+            'mime_type' => $mime,
+            'size' => (int) $size,
+            'temporary' => false,
+        ]);
+        if (!is_array($prepared) || !is_string($prepared['path'] ?? null) || !is_file($prepared['path'])) {
+            throw new InvalidArgumentException('The file type is not supported.');
+        }
+        $temporary = $prepared['path'];
+        $size = filesize($temporary);
+        $mime = $mimeDetector->file($temporary) ?: '';
+        if ($size === false || $size <= 0 || $size > 104857600 || !isset($types[$mime])) {
+            if ($temporary !== $uploadTemporary && !empty($prepared['temporary'])) @unlink($temporary);
+            throw new InvalidArgumentException('The prepared media file is invalid or unsupported.');
+        }
     }
     if ($kind !== 'any' && !str_starts_with($mime, $kind . '/')) {
         throw new InvalidArgumentException('The file type is not supported here.');
@@ -68,7 +86,17 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
     }
     @chmod($privateDirectory, 0700);
     $source = $privateDirectory . '/' . $id . '.' . $types[$mime];
-    $moved = $requireUploadedFile ? move_uploaded_file($temporary, $source) : rename($temporary, $source);
+    if ($temporary === $uploadTemporary) {
+        $moved = $requireUploadedFile ? move_uploaded_file($temporary, $source) : rename($temporary, $source);
+    } elseif (!empty($prepared['temporary'])) {
+        $moved = rename($temporary, $source);
+    } else {
+        $moved = copy($temporary, $source);
+    }
+    if (!$moved && $temporary !== $uploadTemporary && copy($temporary, $source)) {
+        $moved = true;
+        if (!empty($prepared['temporary'])) @unlink($temporary);
+    }
     if (!$moved || !is_file($source)) {
         throw new RuntimeException('Unable to retain the media source.');
     }

@@ -12,6 +12,13 @@ and any responsive variants under `content/media/YYYY/MM`. Uploads still work wh
 GD nor Imagick is installed; responsive WebP variants require one of those extensions.
 Both the admin editor and Micropub Media Endpoint call the same pipeline.
 
+An installation hook named `on_prepare_media_upload` may convert an otherwise unsupported
+local upload before the pipeline accepts it. The filter receives `path`, `name`, detected
+`mime_type`, `size`, and `temporary`. It must return a local file path; the result is subjected
+to the same size, MIME, image-dimension, storage, and database checks as every other upload.
+Set `temporary` to `true` only when the returned file may be removed after ingestion. This
+boundary is intended for local format adapters such as HEIC conversion, not remote storage.
+
 The pipeline validates the detected MIME type and size before moving a file, retains a
 private source under `data/plus/media-originals`, strips supported image metadata, records
 operational media metadata in the private Plus SQLite database, and renders intrinsic
