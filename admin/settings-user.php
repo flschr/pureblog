@@ -33,8 +33,16 @@ if (isset($_GET['setup_mfa']) && !$mfaEnabled) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id'])) {
     verify_csrf();
     $mfaAction = $_POST['mfa_action'] ?? '';
+    $indieAuthAction = $_POST['indieauth_action'] ?? '';
 
-    if ($mfaAction === 'confirm_setup' && !empty($_SESSION['mfa_setup_secret'])) {
+    if ($indieAuthAction === 'revoke_token') {
+        $tokenId = (int) ($_POST['token_id'] ?? 0);
+        if ($tokenId > 0 && indieauth_revoke_access_token($tokenId)) {
+            $notice = t('admin.settings.user.indieauth_notice_revoked');
+        } else {
+            $errors[] = t('admin.settings.user.indieauth_error_revoke');
+        }
+    } elseif ($mfaAction === 'confirm_setup' && !empty($_SESSION['mfa_setup_secret'])) {
         $secret = (string) $_SESSION['mfa_setup_secret'];
         $code = trim((string) ($_POST['mfa_code'] ?? ''));
 
@@ -141,6 +149,7 @@ if ($isSettingUpMfa && !empty($_SESSION['mfa_setup_secret'])) {
 }
 
 $adminTitle = t('admin.settings.user.page_title');
+$indieAuthTokens = indieauth_list_access_tokens();
 require __DIR__ . '/../includes/admin-head.php';
 ?>
     <main class="mid">
@@ -174,6 +183,32 @@ require __DIR__ . '/../includes/admin-head.php';
                 <input type="password" id="confirm_password" name="confirm_password">
             </section>
         </form>
+
+        <section class="section-divider">
+            <span class="title"><?= e(t('admin.settings.user.indieauth_section_title')) ?></span>
+            <p><?= e(t('admin.settings.user.indieauth_description')) ?></p>
+            <?php if ($indieAuthTokens === []): ?>
+                <p><?= e(t('admin.settings.user.indieauth_empty')) ?></p>
+            <?php else: ?>
+                <?php foreach ($indieAuthTokens as $token): ?>
+                    <article class="notice">
+                        <p><strong><?= e((string) $token['client_id']) ?></strong></p>
+                        <p><?= e(t('admin.settings.user.indieauth_scopes')) ?>: <code><?= e((string) $token['scope']) ?></code></p>
+                        <p><?= e(t('admin.settings.user.indieauth_created')) ?>: <?= e(date('Y-m-d H:i', (int) $token['created_at'])) ?></p>
+                        <?php if ($token['revoked_at'] === null): ?>
+                            <form method="post">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="indieauth_action" value="revoke_token">
+                                <input type="hidden" name="token_id" value="<?= (int) $token['id'] ?>">
+                                <button type="submit" class="delete"><?= e(t('admin.settings.user.indieauth_revoke')) ?></button>
+                            </form>
+                        <?php else: ?>
+                            <p><?= e(t('admin.settings.user.indieauth_revoked')) ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </section>
 
         <section class="section-divider">
             <span class="title"><?= e(t('admin.settings.user.mfa_section_title')) ?></span>

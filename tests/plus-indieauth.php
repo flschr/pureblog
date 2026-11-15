@@ -47,6 +47,18 @@ try {
     indieauth_test_assert(indieauth_server_available(), 'Local development origin was not available.');
     indieauth_test_throws(static fn(): string => indieauth_validate_client_id('https://client.example'), 'invalid_request');
     indieauth_test_throws(static fn(): string => indieauth_validate_redirect_uri('javascript:alert(1)'), 'invalid_request');
+    indieauth_test_assert(
+        indieauth_resolve_url_reference('https://client.example/apps/editor/index.html', '../callback?mode=app#done') === 'https://client.example/apps/callback?mode=app#done',
+        'Parent-relative URL reference was not normalized.'
+    );
+    indieauth_test_assert(
+        indieauth_resolve_url_reference('https://client.example/apps/editor', '//login.example/callback') === 'https://login.example/callback',
+        'Scheme-relative URL reference used the wrong origin.'
+    );
+    indieauth_test_assert(
+        indieauth_resolve_url_reference('https://client.example/apps/editor?old=1', '?new=1') === 'https://client.example/apps/editor?new=1',
+        'Query-only URL reference was not resolved.'
+    );
 
     start_admin_session();
     set_admin_login_return_path('/indieauth/authorize.php');
