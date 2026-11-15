@@ -332,7 +332,8 @@ function plus_delete_media(string $id): bool
 {
     $media = plus_media_by_id($id);
     if ($media === null) return false;
-    if (plus_media_is_referenced((string) $media['url'])) {
+    if (plus_media_is_referenced((string) $media['url'])
+        || (function_exists('social_media_is_referenced') && social_media_is_referenced((string) $media['url']))) {
         throw new RuntimeException('Referenced media cannot be deleted.');
     }
     $plugin = plus_plugins()[(string) $media['provider_id']] ?? null;

@@ -97,13 +97,15 @@ function social_http_request(string $method, string $url, array $options = []): 
     $body = '';
     $maximumBytes = max(1024, min(20971520, (int) ($options['maximum_bytes'] ?? 4194304)));
     $tooLarge = false;
-    $headers = ['Accept: application/json', 'User-Agent: PureBlog-Plus-Social'];
+    $headers = ['Accept: ' . (string) ($options['accept'] ?? 'application/json'), 'User-Agent: PureBlog-Plus-Social'];
     if (!empty($options['token'])) $headers[] = 'Authorization: Bearer ' . (string) $options['token'];
     if (!empty($options['idempotency_key'])) $headers[] = 'Idempotency-Key: ' . (string) $options['idempotency_key'];
     $payload = null;
     if (isset($options['json'])) {
         $payload = json_encode($options['json'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         $headers[] = 'Content-Type: application/json';
+    } elseif (isset($options['multipart'])) {
+        $payload = $options['multipart'];
     } elseif (isset($options['form'])) {
         $payload = http_build_query($options['form'], '', '&', PHP_QUERY_RFC3986);
         $headers[] = 'Content-Type: application/x-www-form-urlencoded';
@@ -217,7 +219,7 @@ function social_disconnect(?int $now = null): void
     $revocationError = '';
     if (social_connected($connection) && !empty($connection['client_id']) && !empty($connection['client_secret'])) {
         try {
-            $response = social_api_request('POST', '/oauth/revoke', ['token' => '', 'form' => [
+            $response = social_api_request('POST', '/oauth/revoke', ['token' => '', 'multipart' => [
                 'client_id' => (string) $connection['client_id'], 'client_secret' => (string) $connection['client_secret'],
                 'token' => (string) $connection['access_token'],
             ]], $connection);
@@ -273,7 +275,9 @@ function social_archive_media(string $remoteUrl, string $description = '', strin
     $existing->execute([$remoteUrl]);
     $localUrl = $existing->fetchColumn();
     if (is_string($localUrl) && $localUrl !== '') return $localUrl;
-    $response = social_http_request('GET', $remoteUrl, ['maximum_bytes' => 20971520]);
+    $response = social_http_request('GET', $remoteUrl, [
+        'maximum_bytes' => 20971520, 'accept' => 'image/*, video/*, audio/*, application/octet-stream',
+    ]);
     if (empty($response['ok']) || (string) $response['body'] === '') throw new RuntimeException('Unable to archive social media.');
     $temporary = tempnam(sys_get_temp_dir(), 'pureblog-social-');
     if ($temporary === false || file_put_contents($temporary, $response['body']) === false) throw new RuntimeException('Unable to stage social media.');
@@ -307,6 +311,23 @@ function social_status_media(array $attachments): array
 }
 
 function social_sync(?int $now = null): int
+{
+    if (!is_dir(PUREBLOG_PLUS_DATA_PATH) && !mkdir(PUREBLOG_PLUS_DATA_PATH, 0700, true) && !is_dir(PUREBLOG_PLUS_DATA_PATH)) {
+        throw new RuntimeException('Unable to create social synchronization lock directory.');
+    }
+    $handle = fopen(PUREBLOG_PLUS_DATA_PATH . '/social-sync.lock', 'c');
+    if ($handle === false) throw new RuntimeException('Unable to create social synchronization lock.');
+    @chmod(PUREBLOG_PLUS_DATA_PATH . '/social-sync.lock', 0600);
+    if (!flock($handle, LOCK_EX | LOCK_NB)) { fclose($handle); return 0; }
+    try {
+        return social_sync_locked($now);
+    } finally {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+    }
+}
+
+function social_sync_locked(?int $now = null): int
 {
     $now ??= time();
     $connection = social_connection();
@@ -366,6 +387,20 @@ function social_statuses(int $limit = 100, int $offset = 0): array
     $query->bindValue(2, max(0, $offset), PDO::PARAM_INT);
     $query->execute();
     return $query->fetchAll() ?: [];
+}
+
+function social_media_is_referenced(string $url): bool
+{
+    if (!is_file(plus_database_path())) return false;
+    $query = plus_database()->query('SELECT media_json FROM plus_social_statuses');
+    foreach ($query->fetchAll(PDO::FETCH_COLUMN) ?: [] as $json) {
+        $media = json_decode((string) $json, true);
+        if (!is_array($media)) continue;
+        foreach ($media as $item) {
+            if (is_array($item) && hash_equals((string) ($item['url'] ?? ''), $url)) return true;
+        }
+    }
+    return false;
 }
 
 function social_announcement_record(string $slug): ?array
@@ -452,6 +487,8 @@ function social_publish_announcement(string $slug, string $title, ?array $record
         . 'ON CONFLICT(post_slug) DO UPDATE SET remote_id=excluded.remote_id,remote_url=excluded.remote_url,'
         . 'content_hash=excluded.content_hash,updated_at=excluded.updated_at'
     )->execute([$slug, (string) ($remote['id'] ?? $record['remote_id'] ?? ''), (string) ($remote['url'] ?? $record['remote_url'] ?? ''), $hash, $now]);
+    $remoteId = (string) ($remote['id'] ?? $record['remote_id'] ?? '');
+    if ($remoteId !== '') plus_database()->prepare('DELETE FROM plus_social_statuses WHERE remote_id=?')->execute([$remoteId]);
 }
 
 plus_register_job_handler('social.sync', static function (): void {

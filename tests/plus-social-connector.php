@@ -88,6 +88,8 @@ try {
     social_test_assert(count($statuses) === 2, 'Public projection contains the wrong statuses.');
     social_test_assert($statuses[0]['content_text'] === "First\nstatus", 'Remote HTML was not reduced to safe text.');
     social_test_assert(str_contains($statuses[0]['media_json'], 'blog.example/content/media/social'), 'Archived media URL was not retained.');
+    $archivedMedia = json_decode((string) $statuses[0]['media_json'], true);
+    social_test_assert(social_media_is_referenced((string) $archivedMedia[0]['url']), 'Social projection did not protect archived media from deletion.');
     social_test_assert($statuses[1]['media_json'] === '[]', 'A media failure removed its status or retained the remote URL.');
 
     $statusGeneration = 2;

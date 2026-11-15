@@ -17,7 +17,7 @@ attempts to revoke the remote token and always removes the local credentials.
 The background job runner polls the connected account in bounded pages. Public and unlisted
 original statuses are stored as a read-only local projection; replies, boosts, private posts,
 and statuses created as Pure Blog announcements are excluded. Remote edits and deletions are
-reconciled only after a complete successful poll. Image attachments are copied through the
+reconciled only after a complete successful poll. Supported image, video, and audio attachments are copied through the
 selected Pure Blog media provider, so the public projection does not depend on remote media
 URLs. A failed image copy does not discard its status.
 
