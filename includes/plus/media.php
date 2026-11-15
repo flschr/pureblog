@@ -240,7 +240,11 @@ function plus_write_webp_variant(string $source, string $destination, int $targe
             $image = new Imagick($source);
             $image->setIteratorIndex(0);
             $image->autoOrient();
-            $image->thumbnailImage($targetWidth, 0, true);
+            $sourceWidth = $image->getImageWidth();
+            $sourceHeight = $image->getImageHeight();
+            if ($sourceWidth < 1 || $sourceHeight < 1) { $image->clear(); return false; }
+            $targetHeight = max(1, (int) round($sourceHeight * (min($targetWidth, $sourceWidth) / $sourceWidth)));
+            $image->thumbnailImage(min($targetWidth, $sourceWidth), $targetHeight, true);
             $image->setImageFormat('webp');
             $image->setImageCompressionQuality(82);
             $image->stripImage();
