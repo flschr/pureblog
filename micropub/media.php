@@ -19,6 +19,12 @@ try {
         throw new MicropubProtocolException('invalid_request', 'A complete file upload is required.');
     }
     $media = plus_store_uploaded_media($file);
+    if (plus_alt_suggestions_enabled() && str_starts_with((string) $media['mime_type'], 'image/')) {
+        try {
+            plus_suggest_media_alt((string) $media['url'], (string) ($file['name'] ?? ''));
+        } catch (Throwable) {
+        }
+    }
     http_response_code(201);
     header('Location: ' . $media['url']);
     exit;

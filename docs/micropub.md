@@ -31,6 +31,14 @@ when GD or Imagick is available the pipeline creates responsive WebP variants. T
 URL belongs to the selected provider, so an explicitly configured S3-compatible plugin can
 return a custom media-domain URL without changing Micropub behavior.
 
+If an optional alt-text provider is active, an image upload may also create an editable default
+media description. A client-supplied Markdown, HTML, or structured `photo.alt` value always
+remains authoritative and is never regenerated or replaced. When the client leaves the alt
+text empty, Pure Blog inserts the stored description while creating or updating the post. If
+there is no stored description yet, it tries to generate one at that point. The resulting alt
+text is ordinary post content, is returned by a later source query, and can be edited normally.
+The Media Endpoint itself still returns the standard `Location` response.
+
 Syndication targets are empty until an optional social connector is configured. Unknown
 post properties are ignored as required by Micropub rather than being written into front
 matter.

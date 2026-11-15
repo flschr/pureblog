@@ -304,6 +304,7 @@ require __DIR__ . '/../includes/admin-head.php';
             csrfToken: '<?= e(csrf_token()) ?>',
             basePath: '<?= e(base_path()) ?>',
             altSuggestions: <?= plus_alt_suggestions_enabled($config) ? 'true' : 'false' ?>,
+            missingMediaAlt: <?= json_encode(plus_missing_media_alt_suggestions((string) $page['content']), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
             autosave: <?= $autosaveData !== null ? json_encode($autosaveData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>,
             strings: <?= json_encode([
                 'autosaving'        => t('admin.editor.js_autosaving'),
@@ -325,6 +326,8 @@ require __DIR__ . '/../includes/admin-head.php';
                 'upload_failed'         => t('admin.editor.js_upload_failed'),
                 'feature_image_confirm' => t('admin.editor.js_feature_image_confirm'),
                 'feature_image_failed'  => t('admin.editor.js_feature_image_failed'),
+                'missing_alt_intro'     => t('admin.editor.missing_alt_intro'),
+                'use_alt_suggestion'    => t('admin.editor.use_alt_suggestion'),
                 'insert_gallery'        => t('admin.editor.insert_gallery'),
                 'gallery_inserted'      => t('admin.editor.js_gallery_inserted'),
                 'gallery_picker_title'     => t('admin.editor.gallery_picker_title'),

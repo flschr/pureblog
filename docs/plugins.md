@@ -25,6 +25,12 @@ operational media metadata in the private Plus SQLite database, and renders intr
 dimensions plus `srcset` for known images. Editorial alt text remains in Markdown or the
 structured Micropub `photo` property and is never replaced during rendering.
 
+Each managed image may also retain one editable default description in the operational
+media record. It is not a second copy of editorial content. When saved Markdown, HTML, or a
+structured Micropub photo contains an empty alt text, the description is copied into that
+occurrence and remains ordinary editable post content. An authored alt text is never replaced.
+The media library can edit or clear the reusable default.
+
 ## Optional providers
 
 `s3-media` uploads the same originals and variants to an administrator-configured,
@@ -35,9 +41,12 @@ it is selected and completely configured.
 
 `openai-alt-text` is an optional editor aid. When selected, the private retained image and
 up to 2,500 characters of editorial context are sent to the configured OpenAI API account.
-The returned text is inserted as editable Markdown alt text only if the newly inserted image
-has not already been changed. Micropub clients can provide their own alt text without this
-plugin, and the standalone CMS never requires an AI service.
+The returned text is stored as the editable media description and inserted as alt text only
+when the relevant occurrence is empty. Micropub media uploads generate the same reusable
+description; create and update requests copy it into empty Markdown, HTML, or structured photo
+alt text. Micropub clients can provide their own alt text without this plugin, and that value
+always wins. The standalone CMS never requires an AI service. Generation failures never fail
+the media upload or post save.
 
 Plugin secrets are saved in the existing private PHP configuration file. They are never
 rendered back into the settings form. Disabling an optional plugin leaves Markdown, media

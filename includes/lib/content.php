@@ -993,6 +993,8 @@ function save_page(array &$page, ?string $originalSlug = null, ?string $original
     $description = trim($page['description'] ?? '');
     $includeInNav = (bool) ($page['include_in_nav'] ?? true);
     $content = str_replace("\r", '', $page['content'] ?? '');
+    $content = plus_apply_media_alts_to_markdown($content, $title . "\n" . $description);
+    $page['content'] = $content;
 
     $slug = slugify($slug === '' ? $title : $slug);
 
@@ -1256,6 +1258,10 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     $tags = $post['tags'] ?? [];
     $content = str_replace("\r", '', $post['content'] ?? '');
     $description = trim($post['description'] ?? '');
+    if (($post['micropub_content_format'] ?? 'markdown') === 'markdown') {
+        $content = plus_apply_media_alts_to_markdown($content, $title . "\n" . $description);
+        $post['content'] = $content;
+    }
 
     $slug = slugify($slug === '' ? $title : $slug);
 
