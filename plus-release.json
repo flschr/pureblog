@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.0",
+    "version": "3.9.2-plus.1",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
