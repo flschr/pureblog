@@ -800,7 +800,7 @@
     }
 
     for (const file of event.dataTransfer.files) {
-      if (!file.type.startsWith('image/')) {
+      if (!file.type.startsWith('image/') && !/\.(?:heic|heif)$/i.test(file.name)) {
         continue;
       }
 

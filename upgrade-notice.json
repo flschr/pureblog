@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Unsupported local image formats can now be converted by an installation hook before entering the shared media pipeline. The prepared result is validated like every other upload. Existing providers, media URLs, and default behavior are unchanged."
+    "instructions": "The editor now passes HEIC and HEIF selections and drops to the validated media-preparation hook when an installation provides one. Installations without such an adapter continue to reject unsupported formats safely."
 }
