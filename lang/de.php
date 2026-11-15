@@ -78,6 +78,7 @@ return [
             'cache_cleared' => 'Cache geleert.',
             'invalid_action'=> 'Ungültige Admin-Aktion.',
             'images'        => 'Bilder',
+            'webmentions'   => 'Webmentions',
         ],
 
 
@@ -146,6 +147,29 @@ return [
             'approve'             => 'Erlauben',
             'deny'                => 'Ablehnen',
             'error_scope_required'=> 'Wähle mindestens eine unterstützte Berechtigung oder lehne die Anfrage ab.',
+        ],
+
+        'webmentions' => [
+            'page_title'      => 'Webmentions – Pure Blog Plus',
+            'heading'         => 'Webmentions',
+            'intro'           => 'Eingehende Reaktionen werden hier privat gespeichert. Für die öffentliche Darstellung ist PureComments erforderlich.',
+            'all'             => 'Alle',
+            'previous'        => 'Zurück',
+            'next'            => 'Weiter',
+            'empty'           => 'Keine Webmentions gefunden.',
+            'target'          => 'Ziel',
+            'reject'          => 'Ignorieren',
+            'restore'         => 'Wiederherstellen',
+            'verify'          => 'Erneut prüfen',
+            'restored'        => 'Webmention wurde wiederhergestellt.',
+            'rejected'        => 'Webmention wurde ignoriert.',
+            'queued'          => 'Webmention wurde zur Prüfung eingeplant.',
+            'invalid'         => 'Die Webmention-Aktion konnte nicht ausgeführt werden.',
+            'status_pending'  => 'Ausstehend',
+            'status_verified' => 'Verifiziert',
+            'status_rejected' => 'Ignoriert',
+            'status_invalid'  => 'Ungültig',
+            'status_deleted'  => 'Gelöscht',
         ],
 
 
