@@ -288,6 +288,6 @@ function require_admin_login(): void
 }
 
 // Set site-specific session name to prevent collisions across multiple pureblog installations.
-if (session_status() !== PHP_SESSION_ACTIVE) {
+if (PHP_SAPI !== 'cli' && session_status() !== PHP_SESSION_ACTIVE) {
     session_name('pb_session_' . substr(hash('sha256', get_base_url()), 0, 8));
 }
