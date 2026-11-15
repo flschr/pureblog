@@ -9,6 +9,8 @@ $fontStack = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
 
 $deleted     = isset($_GET['deleted']);
 $deleteError = trim((string) ($_GET['delete_error'] ?? ''));
+$altSaved    = isset($_GET['alt_saved']);
+$altError    = trim((string) ($_GET['alt_error'] ?? ''));
 $search      = trim((string) ($_GET['q'] ?? ''));
 $perPage     = 35;
 $page        = max(1, (int) ($_GET['page'] ?? 1));
@@ -48,11 +50,13 @@ if (is_dir(PUREBLOG_CONTENT_IMAGES_PATH)) {
 foreach (plus_media_list() as $media) {
     if (!str_starts_with((string) $media['mime_type'], 'image/')) continue;
     $filename = basename((string) ($media['original_name'] ?: (parse_url((string) $media['url'], PHP_URL_PATH) ?? $media['id'])));
-    $altText = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+    $defaultAlt = trim((string) ($media['default_alt'] ?? ''));
+    $altText = $defaultAlt !== '' ? $defaultAlt : (pathinfo($filename, PATHINFO_FILENAME) ?: 'image');
     $allImages[] = [
         'slug' => 'media', 'filename' => $filename, 'url' => (string) $media['url'],
-        'markdown' => '![' . $altText . '](' . $media['url'] . ')',
+        'markdown' => '![' . plus_markdown_alt($altText) . '](' . $media['url'] . ')',
         'mtime' => (int) $media['created_at'], 'managed_media' => true, 'media_id' => (string) $media['id'],
+        'default_alt' => $defaultAlt,
     ];
 }
 
@@ -175,6 +179,12 @@ require __DIR__ . '/../includes/admin-head.php';
         <?php if ($deleteError !== ''): ?>
             <p class="notice delete" data-auto-dismiss><?= e($deleteError) ?></p>
         <?php endif; ?>
+        <?php if ($altSaved): ?>
+            <p class="notice" data-auto-dismiss><?= e(t('admin.images.alt_saved')) ?></p>
+        <?php endif; ?>
+        <?php if ($altError !== ''): ?>
+            <p class="notice delete" data-auto-dismiss><?= e($altError) ?></p>
+        <?php endif; ?>
 
         <form method="get" action="<?= base_path() ?>/admin/images.php" class="image-search-form">
             <label class="hidden" for="q"><?= e(t('admin.images.search_label')) ?></label>
@@ -235,6 +245,18 @@ require __DIR__ . '/../includes/admin-head.php';
                                 <svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg>
                                 <?= e(t('admin.editor.copy')) ?>
                             </button>
+
+                            <?php if (!empty($image['managed_media'])): ?>
+                                <form method="post" action="<?= base_path() ?>/admin/update-media-alt.php" class="image-default-alt-form">
+                                    <input type="hidden" name="id" value="<?= e($image['media_id']) ?>">
+                                    <?= csrf_field() ?>
+                                    <label>
+                                        <?= e(t('admin.images.default_alt')) ?>
+                                        <input type="text" name="default_alt" maxlength="1500" value="<?= e($image['default_alt'] ?? '') ?>" placeholder="<?= e(t('admin.images.default_alt_placeholder')) ?>">
+                                    </label>
+                                    <button type="submit" class="link-button"><?= e(t('admin.editor.save')) ?></button>
+                                </form>
+                            <?php endif; ?>
 
                             <?php if (!empty($image['managed_media']) && !empty($image['referenced_in'])): ?>
                                 <span class="tip"><?= e(plus_media_by_url($image['url'])['provider_id'] ?? '') ?> · <?= e(t('admin.images.used_in_count', ['count' => count($image['referenced_in'])])) ?></span>

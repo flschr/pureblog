@@ -151,6 +151,15 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
     if ($existing !== null && $contentFormat === 'text') {
         $contentFormat = (string) ($existing['micropub_content_format'] ?? 'markdown');
     }
+    $altContext = trim(micropub_first_string($properties, 'name') . "\n" . strip_tags($content));
+    if ($contentFormat === 'html') {
+        $content = plus_apply_media_alts_to_html($content, $altContext);
+    } elseif ($contentFormat === 'markdown') {
+        $content = plus_apply_media_alts_to_markdown($content, $altContext);
+    }
+    if (isset($properties['photo']) && is_array($properties['photo'])) {
+        $properties['photo'] = plus_apply_media_alts_to_photos($properties['photo'], $altContext);
+    }
     $published = micropub_first_string($properties, 'published');
     if ($published === '') {
         $published = current_site_datetime_for_storage(load_config());

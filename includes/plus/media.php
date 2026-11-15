@@ -19,6 +19,10 @@ plus_register_migration('0005_media', static function (PDO $database): void {
     );
 });
 
+plus_register_migration('0006_media_default_alt', static function (PDO $database): void {
+    $database->exec("ALTER TABLE plus_media ADD COLUMN default_alt TEXT NOT NULL DEFAULT ''");
+});
+
 /** @return array<string,string> */
 function plus_media_types(): array
 {
@@ -364,7 +368,104 @@ function plus_suggest_media_alt(string $url, string $context): string
     $suggestion = ($provider['handler'])($media, mb_substr($context, 0, 2500), $provider['settings']);
     $suggestion = trim(preg_replace('/\s+/u', ' ', (string) $suggestion) ?? '');
     if ($suggestion === '') throw new RuntimeException('Alt-text suggestion was empty.');
-    return mb_substr($suggestion, 0, 1500);
+    $suggestion = mb_substr($suggestion, 0, 1500);
+    plus_set_media_default_alt((string) $media['id'], $suggestion);
+    return $suggestion;
+}
+
+function plus_set_media_default_alt(string $id, string $alt): void
+{
+    if (preg_match('/^[a-f0-9]{32}$/', $id) !== 1) throw new InvalidArgumentException('Unknown media.');
+    $alt = mb_substr(trim(preg_replace('/\s+/u', ' ', $alt) ?? ''), 0, 1500);
+    $statement = plus_database()->prepare('UPDATE plus_media SET default_alt=? WHERE id=?');
+    $statement->execute([$alt, $id]);
+    if ($statement->rowCount() !== 1 && plus_media_by_id($id) === null) throw new InvalidArgumentException('Unknown media.');
+}
+
+function plus_media_default_alt(string $url, string $context = ''): string
+{
+    $media = plus_media_by_url($url);
+    if ($media === null || !str_starts_with((string) $media['mime_type'], 'image/')) return '';
+    $alt = trim((string) ($media['default_alt'] ?? ''));
+    if ($alt !== '') return $alt;
+    if (!plus_alt_suggestions_enabled()) return '';
+    try {
+        return plus_suggest_media_alt($url, $context);
+    } catch (Throwable) {
+        return '';
+    }
+}
+
+function plus_markdown_alt(string $alt): string
+{
+    return str_replace(['\\', '[', ']'], ['\\\\', '\\[', '\\]'], trim(preg_replace('/\s+/u', ' ', $alt) ?? ''));
+}
+
+function plus_apply_media_alts_to_markdown(string $content, string $context = ''): string
+{
+    if (!str_contains($content, '![') || !is_file(plus_database_path())) return $content;
+    return preg_replace_callback(
+        '/!\[\s*\]\((https?:\/\/[^\s)]+)((?:\s+["\'][^"\']*["\'])?)\)/u',
+        static function (array $match) use ($context): string {
+            $alt = plus_media_default_alt($match[1], $context);
+            return $alt === '' ? $match[0] : '![' . plus_markdown_alt($alt) . '](' . $match[1] . $match[2] . ')';
+        },
+        $content
+    ) ?? $content;
+}
+
+function plus_apply_media_alts_to_html(string $html, string $context = ''): string
+{
+    if (!str_contains(strtolower($html), '<img') || !is_file(plus_database_path())) return $html;
+    return preg_replace_callback('/<img\b[^>]*>/iu', static function (array $match) use ($context): string {
+        $tag = $match[0];
+        $hasAlt = preg_match('/\salt\s*=\s*(["\'])(.*?)\1/isu', $tag, $existing) === 1;
+        if ($hasAlt && trim(html_entity_decode($existing[2], ENT_QUOTES | ENT_HTML5)) !== '') return $tag;
+        if (!preg_match('/\ssrc\s*=\s*(["\'])(.*?)\1/isu', $tag, $source)) return $tag;
+        $url = html_entity_decode($source[2], ENT_QUOTES | ENT_HTML5);
+        $alt = plus_media_default_alt($url, $context);
+        if ($alt === '') return $tag;
+        $attribute = 'alt="' . htmlspecialchars($alt, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '"';
+        if ($hasAlt) {
+            return preg_replace_callback(
+                '/\salt\s*=\s*(["\']).*?\1/isu',
+                static fn(): string => ' ' . $attribute,
+                $tag,
+                1
+            ) ?? $tag;
+        }
+        $closing = str_ends_with(rtrim($tag), '/>') ? ' />' : '>';
+        return preg_replace_callback('/\s*\/?>$/u', static fn(): string => ' ' . $attribute . $closing, $tag, 1) ?? $tag;
+    }, $html) ?? $html;
+}
+
+/** @param list<mixed> $values @return list<mixed> */
+function plus_apply_media_alts_to_photos(array $values, string $context = ''): array
+{
+    foreach ($values as $index => $value) {
+        $url = is_string($value) ? $value : (is_array($value) ? (string) ($value['value'] ?? '') : '');
+        $authoredAlt = is_array($value) ? trim((string) ($value['alt'] ?? '')) : '';
+        if ($url === '' || $authoredAlt !== '') continue;
+        $alt = plus_media_default_alt($url, $context);
+        if ($alt === '') continue;
+        $values[$index] = is_array($value) ? array_replace($value, ['alt' => $alt]) : ['value' => $url, 'alt' => $alt];
+    }
+    return array_values($values);
+}
+
+/** @return list<array{id:string,url:string,alt:string}> */
+function plus_missing_media_alt_suggestions(string $content): array
+{
+    if (!str_contains($content, '![') || !is_file(plus_database_path())) return [];
+    $suggestions = [];
+    if (!preg_match_all('/!\[\s*\]\((https?:\/\/[^\s)]+)(?:\s+["\'][^"\']*["\'])?\)/u', $content, $matches)) return [];
+    foreach (array_unique($matches[1]) as $url) {
+        $media = plus_media_by_url($url);
+        if ($media === null) continue;
+        $alt = trim((string) ($media['default_alt'] ?? ''));
+        if ($alt !== '') $suggestions[] = ['id' => (string) $media['id'], 'url' => $url, 'alt' => $alt];
+    }
+    return $suggestions;
 }
 
 /** @return list<array<string,mixed>> */

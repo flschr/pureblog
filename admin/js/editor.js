@@ -43,6 +43,40 @@
   // Initialize syntax editor on the main content textarea
   const mainEditor = window.createSyntaxEditor(contentField, 'markdown');
 
+  const missingMediaAlt = Array.isArray(config.missingMediaAlt) ? config.missingMediaAlt : [];
+  if (missingMediaAlt.length > 0) {
+    const notice = document.createElement('section');
+    notice.className = 'notice media-alt-suggestions';
+    const intro = document.createElement('p');
+    intro.textContent = config.strings.missing_alt_intro || 'Images without alt text have saved suggestions.';
+    notice.appendChild(intro);
+    missingMediaAlt.forEach((suggestion) => {
+      if (!suggestion || typeof suggestion.url !== 'string' || typeof suggestion.alt !== 'string') return;
+      const row = document.createElement('p');
+      const text = document.createElement('span');
+      text.textContent = suggestion.alt;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'link-button';
+      button.textContent = config.strings.use_alt_suggestion || 'Use suggestion';
+      button.addEventListener('click', () => {
+        const escapedUrl = suggestion.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`!\\[\\s*\\]\\(${escapedUrl}(?=\\s|\\))`, 'u');
+        const escapedAlt = suggestion.alt.trim().replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]').replace(/[\r\n]+/g, ' ');
+        const updated = contentField.value.replace(pattern, `![${escapedAlt}](${suggestion.url}`);
+        if (updated === contentField.value) return;
+        mainEditor.updateCode(updated);
+        contentField.dispatchEvent(new Event('input', { bubbles: true }));
+        row.remove();
+        if (!notice.querySelector('p span')) notice.remove();
+      });
+      row.append(text, ' ', button);
+      notice.appendChild(row);
+    });
+    const form = document.getElementById(config.formId || '');
+    form?.parentNode?.insertBefore(notice, form);
+  }
+
   contentField.addEventListener('input', () => {
     scheduleAutosave();
   });

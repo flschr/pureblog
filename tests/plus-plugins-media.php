@@ -90,6 +90,24 @@ try {
     plugin_media_assert($media['width'] === 1600 && $media['height'] === 900, 'Image dimensions were lost.');
     plugin_media_assert(array_keys($media['variants']) === [360, 720, 1440], 'Responsive variants are incomplete.');
     plugin_media_assert(is_file((string) plus_media_by_url($media['url'])['local_source']), 'Private retained source is missing.');
+    plus_set_media_default_alt($media['id'], "  A reusable blue image\n description.  ");
+    $storedMedia = plus_media_by_url($media['url']);
+    plugin_media_assert($storedMedia['default_alt'] === 'A reusable blue image description.', 'Default media description was not normalized and stored.');
+    $missingAlt = plus_missing_media_alt_suggestions('Before ![](' . $media['url'] . ') after');
+    plugin_media_assert(count($missingAlt) === 1 && $missingAlt[0]['alt'] === $storedMedia['default_alt'], 'Missing contextual alt text did not expose the stored suggestion.');
+    plugin_media_assert(plus_missing_media_alt_suggestions('![Own description](' . $media['url'] . ')') === [], 'Authored contextual alt text was offered for replacement.');
+    $filledMarkdown = plus_apply_media_alts_to_markdown('Before ![](' . $media['url'] . ') after');
+    plugin_media_assert(str_contains($filledMarkdown, '![A reusable blue image description.]'), 'Empty Markdown alt text was not filled.');
+    $authoredMarkdown = '![Author choice](' . $media['url'] . ')';
+    plugin_media_assert(plus_apply_media_alts_to_markdown($authoredMarkdown) === $authoredMarkdown, 'Authored Markdown alt text was replaced.');
+    $filledHtml = plus_apply_media_alts_to_html('<p><img src="' . $media['url'] . '" alt=""></p>');
+    plugin_media_assert(str_contains($filledHtml, 'alt="A reusable blue image description."'), 'Empty HTML alt text was not filled.');
+    $authoredHtml = '<img src="' . $media['url'] . '" alt="Author choice">';
+    plugin_media_assert(plus_apply_media_alts_to_html($authoredHtml) === $authoredHtml, 'Authored HTML alt text was replaced.');
+    $filledPhotos = plus_apply_media_alts_to_photos([['value' => $media['url'], 'alt' => ''], $media['url']]);
+    plugin_media_assert($filledPhotos[0]['alt'] === $storedMedia['default_alt'] && $filledPhotos[1]['alt'] === $storedMedia['default_alt'], 'Structured Micropub photos did not receive default alt text.');
+    $authoredPhotos = plus_apply_media_alts_to_photos([['value' => $media['url'], 'alt' => 'Author choice']]);
+    plugin_media_assert($authoredPhotos[0]['alt'] === 'Author choice', 'Authored structured photo alt text was replaced.');
     $publicVariantPaths = [];
     foreach ($media['variants'] as $variantUrl) {
         $path = parse_url($variantUrl, PHP_URL_PATH);
@@ -129,7 +147,7 @@ try {
     plugin_media_assert(plus_media_by_url($media['url']) === null, 'Deleted media record remains.');
     foreach ($publicVariantPaths as $path) plugin_media_assert(!is_file($path), 'Deleted media variant remains.');
 
-    echo "PASS: bundled plugin trust, local provider, shared media storage, prepared formats, responsive variants, authored alt text and deletion\n";
+    echo "PASS: bundled plugin trust, local provider, shared media storage, automatic missing alt text, prepared formats, responsive variants, authored alt text and deletion\n";
 } finally {
     plugin_media_remove_tree($root);
 }

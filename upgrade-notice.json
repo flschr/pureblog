@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Responsive WebP generation now supplies explicit dimensions for compatibility with Imagick builds that reject zero-height thumbnails. Existing media and provider settings are unchanged."
+    "instructions": "Managed images now retain an editable default description. Empty Markdown, HTML, and Micropub photo alt text receives that description automatically, while any client- or author-supplied alt text remains unchanged. Existing media URLs, posts, and plugin settings are unchanged."
 }

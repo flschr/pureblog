@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.7",
+    "version": "3.9.2-plus.8",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
@@ -11,25 +11,26 @@
         "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/plugins.php": "58ce3d883a79ea2156fc41e8ac4583791c66664532166a7ee0fd64ae5ab5b3dc",
-        "includes/plus/media.php": "70fe89894ae6af1f16a7ee6aac25323d3128d2f8f906e6bb166e2141678ccbea",
+        "includes/plus/media.php": "4785bda162df9ac1049dbbf5b615434bd2b6acc3fc72293313217df36c8807c5",
         "includes/plugins/local-media.php": "b61ded39c32383a772f55e5f2c31f1f6b82f4f20c3053763aec97bfcb9cd7e47",
         "includes/plugins/s3-media.php": "0e6d1b691e5f2b7b38d42485ec070d26bae44e6b063871b61af3cccfa491e9e7",
         "includes/plugins/openai-alt-text.php": "1bdb02068e02637a7de59da69987ff0fda8affaf93370bfb03c192b00e4f83d4",
         "includes/plus/indieauth.php": "75204e9cd504391f82bcfb8a96201955dd08721d3d770745b37189b24d0bd804",
         "includes/plus/indieauth-client.php": "568fb5dfe6f8e3c3096cd29c9c6e8b1a746f349fe95aab34f473763bea613edc",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
-        "includes/plus/micropub.php": "d7ac9640cc4319c83f2542a3561b76cd565b3c7506614d3b5a66df188d7bb2ef",
+        "includes/plus/micropub.php": "e4b0ec2d6b1b5ef3d298cbc69b758d98c878d23fd9083c13f81f7f099a3a78fb",
         "includes/plus/webmentions.php": "242fd64a034304f7b0447cf08c30f7940228cf2c397b6805919d56005165e8ed",
         "includes/plus/webmention-sender.php": "28b49c0969ea6e7bfc814b4cfc5760ea4cfd0f5e507c46a860e1056aa054813d",
         "indieauth/authorize.php": "47fd31c5bdeb7ffed46f6613cadb9cd6587d4c0428b25028beebaa15527d197d",
         "indieauth/metadata.php": "37bd70916cf6aa75596586c00211a053d184b54d3e803137a3e799f898a0b4c8",
         "indieauth/token.php": "be198c7fefcf750cb7d08159348f88d9a5777fc22ca722d51d9e4287b0ce02a2",
         "micropub/index.php": "630b27bc077aa141b4e566f69888ab640088f8495194b74385e417791c72a6ad",
-        "micropub/media.php": "de0dd994a947559e301450d1fd4ba43d8073c6f273c378a163abd957d52b86e3",
+        "micropub/media.php": "1ac18dabc25165a487fc815d19ad75bb8d4a24cb15d2ef64e353e3148a0ee36f",
         "webmention/index.php": "af25bb550b72eca26cff9af60e2b0267f648f51a7748afa786b9ba9b70108458",
         "admin/webmentions.php": "39cbc78028ec837c665a53d2bc13348ca8c6284670dac5ade9f3053408723727",
         "admin/settings-plugins.php": "ebb94e6b4296d92126959a7d84aa9f2278ee9541169b5af4ece2660b8ce09a2f",
         "admin/media-alt-text.php": "71343ff28c79cfe8ae9c40d5cdd5f2b688c3f33d95809019c80fc17f1d66f218",
+        "admin/update-media-alt.php": "cbf77a426143524e2c9a70afe1817ed6cf13bbc64f09ad27a4f70347628d76a5",
         "admin/delete-media.php": "1bc67b7057bb5530ca49bbecd4da9b9f42cf57c4de1c18d7f18234b54d18e1fc"
     }
 }
