@@ -98,6 +98,9 @@ function pureblog_plus_protected_release_files(): array
         'includes/plus/jobs.php',
         'includes/plus/job-runner.php',
         'includes/plus/capabilities.php',
+        'includes/plus/indieauth.php',
+        'includes/plus/indieauth-client.php',
+        'includes/plus/indieauth-tokens.php',
     ];
 }
 

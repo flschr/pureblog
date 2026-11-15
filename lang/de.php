@@ -134,6 +134,20 @@ return [
             'time_days_ago'        => 'Vor {n} Tagen',
         ],
 
+        'indieauth' => [
+            'page_title'          => 'Anwendung autorisieren – Pure Blog Plus',
+            'heading'             => 'Anwendung autorisieren',
+            'intro'               => '{client} möchte auf deine Website zugreifen.',
+            'client'              => 'Client',
+            'redirect'            => 'Rücksprungadresse',
+            'permissions'         => 'Berechtigungen',
+            'unsupported_scope'   => 'nicht unterstützt',
+            'sign_in_only'        => 'Diese Anfrage bestätigt nur deine Profil-URL und erstellt kein Zugriffstoken.',
+            'approve'             => 'Erlauben',
+            'deny'                => 'Ablehnen',
+            'error_scope_required'=> 'Wähle mindestens eine unterstützte Berechtigung oder lehne die Anfrage ab.',
+        ],
+
 
         'content' => [
             'page_title'            => 'Inhalte - Pure Blog',
@@ -461,6 +475,15 @@ return [
                 'page_title'           => 'Benutzereinstellungen – Pure Blog',
                 'heading'              => 'Benutzereinstellungen',
                 'section_account'      => 'Konto',
+                'indieauth_section_title' => 'Verbundene Publishing-Apps',
+                'indieauth_description' => 'Zugriffstoken bleiben aktiv, bis du sie hier widerrufst.',
+                'indieauth_empty' => 'Es sind keine Publishing-Apps verbunden.',
+                'indieauth_scopes' => 'Berechtigungen',
+                'indieauth_created' => 'Verbunden',
+                'indieauth_revoke' => 'Zugriff widerrufen',
+                'indieauth_revoked' => 'Zugriff widerrufen',
+                'indieauth_notice_revoked' => 'Zugriff der Publishing-App wurde widerrufen.',
+                'indieauth_error_revoke' => 'Zugriff der Publishing-App konnte nicht widerrufen werden.',
                 'username'             => 'Admin-Benutzername',
                 'section_password'     => 'Passwort ändern',
                 'current_password'     => 'Aktuelles Passwort',

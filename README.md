@@ -14,6 +14,8 @@ and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blo
 [Plus runtime](docs/plus-runtime.md) documents lazy SQLite migrations, capabilities, and
 the local background-job queue used by optional protocols and connectors. The
 [release contract](docs/releases.md) describes versioning, package validation, and updates.
+The [IndieAuth server](docs/indieauth.md) lets compatible applications obtain narrowly
+scoped credentials through the existing admin login and MFA flow.
 
 ## Pure Blog foundation
 
@@ -36,6 +38,7 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 - **Required PHP extensions:** `mbstring`, `xml`
 - **Recommended PHP extensions:** `curl`, `zip`
 - **Required for Plus protocols and connectors:** `pdo_sqlite`
+- **Required for cross-origin IndieAuth clients:** `curl`
 - Write access to `/config`, `/content`, and `/data`
 
 > **Nginx users:** you will also need `php-fpm` configured alongside Nginx, as PHP-FPM is required to process PHP when not using Apache.
