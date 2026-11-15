@@ -22,6 +22,7 @@ if ($token === '' || !is_string($sessionToken) || !hash_equals($sessionToken, $t
 $slug       = trim($_POST['slug'] ?? '');
 $editorType = trim($_POST['editor_type'] ?? 'post');
 $filename   = trim($_POST['filename'] ?? '');
+$url        = trim($_POST['url'] ?? '');
 
 if ($slug === '' || !in_array($editorType, ['post', 'page'], true)) {
     echo json_encode(['success' => false, 'error' => t('admin.editor.error_autosave_slug')]);
@@ -45,7 +46,9 @@ if ($filepath === null) {
     exit;
 }
 
-if ($filename !== '') {
+if ($url !== '' && ($managed = plus_media_by_url($url)) !== null && str_starts_with((string) $managed['mime_type'], 'image/')) {
+    $featureValue = $url;
+} elseif ($filename !== '') {
     $cleanFilename = basename($filename);
     $ext = strtolower(pathinfo($cleanFilename, PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'], true)) {

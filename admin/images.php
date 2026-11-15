@@ -45,6 +45,17 @@ if (is_dir(PUREBLOG_CONTENT_IMAGES_PATH)) {
     }
 }
 
+foreach (plus_media_list() as $media) {
+    if (!str_starts_with((string) $media['mime_type'], 'image/')) continue;
+    $filename = basename((string) ($media['original_name'] ?: (parse_url((string) $media['url'], PHP_URL_PATH) ?? $media['id'])));
+    $altText = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+    $allImages[] = [
+        'slug' => 'media', 'filename' => $filename, 'url' => (string) $media['url'],
+        'markdown' => '![' . $altText . '](' . $media['url'] . ')',
+        'mtime' => (int) $media['created_at'], 'managed_media' => true, 'media_id' => (string) $media['id'],
+    ];
+}
+
 // Filter by search
 if ($search !== '') {
     $allImages = array_values(array_filter(
@@ -86,6 +97,11 @@ foreach (get_all_pages(true) as $p) {
 
 // Build usage map by scanning all post/page .md files once
 $usageMap = [];
+$managedUsageMap = [];
+$managedUrlLookup = [];
+foreach ($allImages as $managedImage) {
+    if (!empty($managedImage['managed_media'])) $managedUrlLookup[(string) $managedImage['url']] = true;
+}
 foreach ([
     ['dir' => PUREBLOG_POSTS_PATH, 'type' => 'post'],
     ['dir' => PUREBLOG_PAGES_PATH, 'type' => 'page'],
@@ -98,9 +114,6 @@ foreach ([
         if ($raw === false) {
             continue;
         }
-        if (!preg_match_all('#/content/images/([^/\s\)\'"]+)/([^\s\)\'"]+)#', $raw, $matches, PREG_SET_ORDER)) {
-            continue;
-        }
         $parsed = parse_post_file($mdFile);
         $front  = $parsed['front_matter'];
         $entry  = [
@@ -108,6 +121,14 @@ foreach ([
             'slug'  => $front['slug'] ?? '',
             'type'  => $source['type'],
         ];
+        if (preg_match_all('#https?://[^\s\)\'"<>]+#', $raw, $managedMatches)) {
+            foreach (array_unique($managedMatches[0]) as $managedUrl) {
+                if (isset($managedUrlLookup[$managedUrl])) $managedUsageMap[$managedUrl][] = $entry;
+            }
+        }
+        if (!preg_match_all('#/content/images/([^/\s\)\'"]+)/([^\s\)\'"]+)#', $raw, $matches, PREG_SET_ORDER)) {
+            continue;
+        }
         $seenKeys = [];
         foreach ($matches as $match) {
             $key = $match[1] . '/' . $match[2];
@@ -122,6 +143,13 @@ foreach ([
 
 // Attach usage info to the current page of images only
 foreach ($pageImages as &$image) {
+    if (!empty($image['managed_media'])) {
+        $usedIn = $managedUsageMap[$image['url']] ?? [];
+        $image['used_in'] = $usedIn;
+        $image['referenced_in'] = $usedIn;
+        $image['thumb_url'] = $image['url'];
+        continue;
+    }
     $imgKey = $image['slug'] . '/' . $image['filename'];
     $usedIn = $usageMap[$imgKey] ?? [];
 
@@ -208,7 +236,15 @@ require __DIR__ . '/../includes/admin-head.php';
                                 <?= e(t('admin.editor.copy')) ?>
                             </button>
 
-                            <?php if (!empty($image['referenced_in'])): ?>
+                            <?php if (!empty($image['managed_media']) && !empty($image['referenced_in'])): ?>
+                                <span class="tip"><?= e(plus_media_by_url($image['url'])['provider_id'] ?? '') ?> · <?= e(t('admin.images.used_in_count', ['count' => count($image['referenced_in'])])) ?></span>
+                            <?php elseif (!empty($image['managed_media'])): ?>
+                                <form method="post" action="<?= base_path() ?>/admin/delete-media.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.images.delete_confirm')) ?>')">
+                                    <input type="hidden" name="id" value="<?= e($image['media_id']) ?>">
+                                    <?= csrf_field() ?>
+                                    <button type="submit" class="link-button delete"><svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg> <?= e(t('admin.editor.delete')) ?></button>
+                                </form>
+                            <?php elseif (!empty($image['referenced_in'])): ?>
                                 <button type="button" class="link-button delete" onclick="document.getElementById('<?= e($dialogId) ?>').showModal()">
                                     <svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg>
                                     <?= e(t('admin.editor.delete')) ?>

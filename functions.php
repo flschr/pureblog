@@ -25,6 +25,10 @@ const PUREBLOG_SEARCH_INDEX_PATH = PUREBLOG_BASE_PATH . '/content/search-index.j
 const PUREBLOG_TAG_INDEX_PATH = PUREBLOG_BASE_PATH . '/content/tag-index.json';
 const PUREBLOG_DATA_PATH = PUREBLOG_BASE_PATH . '/data';
 const PUREBLOG_CONTENT_IMAGES_PATH = PUREBLOG_BASE_PATH . '/content/images';
+if (!defined('PUREBLOG_MEDIA_PATH')) {
+    define('PUREBLOG_MEDIA_PATH', PUREBLOG_BASE_PATH . '/content/media');
+}
+const PUREBLOG_BUNDLED_PLUGINS_PATH = PUREBLOG_BASE_PATH . '/includes/plugins';
 const PUREBLOG_CONTENT_CSS_PATH = PUREBLOG_BASE_PATH . '/content/css';
 const PUREBLOG_HOOKS_PATH = PUREBLOG_BASE_PATH . '/config/hooks.php';
 const PUREBLOG_CACHE_PATH = PUREBLOG_BASE_PATH . '/cache';
@@ -117,6 +121,14 @@ function default_config(): array
             'purecomments_enabled' => false,
             'purecomments_url' => '',
             'purecomments_autoload' => false,
+        ],
+        'plugins' => [
+            'enabled' => ['local-media'],
+            'providers' => [
+                'media.storage' => 'local-media',
+                'media.alt_suggestion' => '',
+            ],
+            'settings' => [],
         ],
     ];
 }

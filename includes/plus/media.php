@@ -1,0 +1,397 @@
+<?php
+
+declare(strict_types=1);
+
+plus_register_migration('0005_media', static function (PDO $database): void {
+    $database->exec(
+        'CREATE TABLE plus_media ('
+        . 'id TEXT PRIMARY KEY,'
+        . 'provider_id TEXT NOT NULL,'
+        . 'url TEXT NOT NULL UNIQUE,'
+        . 'mime_type TEXT NOT NULL,'
+        . 'original_name TEXT NOT NULL,'
+        . 'width INTEGER,'
+        . 'height INTEGER,'
+        . 'variants_json TEXT NOT NULL DEFAULT \'{}\','
+        . 'provider_data_json TEXT NOT NULL DEFAULT \'{}\','
+        . 'local_source TEXT NOT NULL,'
+        . 'created_at INTEGER NOT NULL)'
+    );
+});
+
+/** @return array<string,string> */
+function plus_media_types(): array
+{
+    return [
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif',
+        'image/webp' => 'webp', 'image/avif' => 'avif',
+        'audio/mpeg' => 'mp3', 'audio/mp4' => 'm4a', 'audio/ogg' => 'ogg',
+        'audio/wav' => 'wav', 'audio/x-wav' => 'wav', 'audio/flac' => 'flac',
+        'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/quicktime' => 'mov',
+    ];
+}
+
+/**
+ * Store one upload through the configured media provider.
+ *
+ * @param array<string,mixed> $file
+ * @return array<string,mixed>
+ */
+function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true, ?string $providerId = null, string $kind = 'any'): array
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new InvalidArgumentException('A complete file upload is required.');
+    }
+    $temporary = (string) ($file['tmp_name'] ?? '');
+    $size = is_file($temporary) ? filesize($temporary) : false;
+    if ($temporary === '' || $size === false || $size <= 0 || $size > 104857600) {
+        throw new InvalidArgumentException('The file is empty or exceeds 100 MB.');
+    }
+    if ($requireUploadedFile && !is_uploaded_file($temporary)) {
+        throw new InvalidArgumentException('The upload source is not valid.');
+    }
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporary) ?: '';
+    $types = plus_media_types();
+    if (!isset($types[$mime])) {
+        throw new InvalidArgumentException('The file type is not supported.');
+    }
+    if ($kind !== 'any' && !str_starts_with($mime, $kind . '/')) {
+        throw new InvalidArgumentException('The file type is not supported here.');
+    }
+
+    $database = plus_database();
+    $id = bin2hex(random_bytes(16));
+    $createdAt = time();
+    $privateDirectory = PUREBLOG_PLUS_DATA_PATH . '/media-originals';
+    if (!is_dir($privateDirectory) && !mkdir($privateDirectory, 0700, true) && !is_dir($privateDirectory)) {
+        throw new RuntimeException('Unable to create the private media directory.');
+    }
+    @chmod($privateDirectory, 0700);
+    $source = $privateDirectory . '/' . $id . '.' . $types[$mime];
+    $moved = $requireUploadedFile ? move_uploaded_file($temporary, $source) : rename($temporary, $source);
+    if (!$moved || !is_file($source)) {
+        throw new RuntimeException('Unable to retain the media source.');
+    }
+    @chmod($source, 0600);
+
+    $generated = [];
+    $stored = null;
+    try {
+        [$width, $height] = plus_media_dimensions($source, $mime);
+        if (str_starts_with($mime, 'image/')) {
+            $maximumPixels = class_exists('Imagick') ? 60000000 : 30000000;
+            if ($width < 1 || $height < 1 || $width > 20000 || $height > 20000 || $width * $height > $maximumPixels) {
+                throw new InvalidArgumentException('The image dimensions are invalid or too large for this server.');
+            }
+            plus_normalize_image($source, $mime);
+            call_hook('on_image_uploaded', [$source]);
+            [$width, $height] = plus_media_dimensions($source, $mime);
+        }
+        $originalName = $id . '.' . $types[$mime];
+        $files = [[
+            'role' => 'original', 'path' => $source, 'name' => $originalName,
+            'mime_type' => $mime, 'width' => $width, 'height' => $height,
+        ]];
+        if (str_starts_with($mime, 'image/') && $mime !== 'image/gif') {
+            foreach (plus_generate_image_variants($source, $id, $width, $height) as $variant) {
+                $files[] = $variant;
+                $generated[] = $variant['path'];
+            }
+        }
+        $provider = plus_plugin_provider('media.storage', $providerId);
+        $asset = [
+            'id' => $id, 'mime_type' => $mime, 'width' => $width, 'height' => $height,
+            'created_at' => $createdAt, 'original_name' => (string) ($file['name'] ?? $originalName),
+        ];
+        $stored = ($provider['handler'])($asset, $files, $provider['settings']);
+        $url = trim((string) ($stored['url'] ?? ''));
+        $variants = (array) ($stored['variants'] ?? []);
+        if (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)) {
+            throw new RuntimeException('Media provider returned an invalid URL.');
+        }
+        foreach ($variants as $variantWidth => $variantUrl) {
+            if ((int) $variantWidth < 1 || !is_string($variantUrl) || !filter_var($variantUrl, FILTER_VALIDATE_URL)) {
+                throw new RuntimeException('Media provider returned invalid variants.');
+            }
+        }
+        $statement = $database->prepare(
+            'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,width,height,variants_json,provider_data_json,local_source,created_at) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        );
+        $statement->execute([
+            $id, $provider['id'], $url, $mime, basename((string) ($file['name'] ?? $originalName)), $width ?: null, $height ?: null,
+            json_encode($variants, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            json_encode((array) ($stored['provider_data'] ?? []), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            $source, $createdAt,
+        ]);
+        return [
+            'id' => $id, 'provider' => $provider['id'], 'url' => $url, 'mime_type' => $mime,
+            'width' => $width, 'height' => $height, 'variants' => $variants,
+        ];
+    } catch (Throwable $error) {
+        if (is_array($stored) && is_callable($stored['rollback'] ?? null)) {
+            try {
+                ($stored['rollback'])();
+            } catch (Throwable) {
+            }
+        }
+        @unlink($source);
+        throw $error;
+    } finally {
+        foreach ($generated as $path) {
+            @unlink($path);
+        }
+    }
+}
+
+function plus_normalize_image(string $path, string $mime): void
+{
+    if (class_exists('Imagick')) {
+        try {
+            $image = new Imagick($path);
+            if ($image->getNumberImages() === 1) {
+                $image->autoOrient();
+                $image->stripImage();
+                $image->writeImage($path . '.normalized');
+                if (is_file($path . '.normalized') && filesize($path . '.normalized') > 0) {
+                    rename($path . '.normalized', $path);
+                }
+            }
+            $image->destroy();
+            return;
+        } catch (Throwable) {
+            @unlink($path . '.normalized');
+        }
+    }
+    strip_image_metadata($path, $mime);
+}
+
+/** @return array{0:int,1:int} */
+function plus_media_dimensions(string $path, string $mime): array
+{
+    if (!str_starts_with($mime, 'image/')) {
+        return [0, 0];
+    }
+    $dimensions = @getimagesize($path);
+    return is_array($dimensions) ? [(int) $dimensions[0], (int) $dimensions[1]] : [0, 0];
+}
+
+/** @return list<array<string,mixed>> */
+function plus_generate_image_variants(string $source, string $id, int $width, int $height): array
+{
+    if ($width < 1 || $height < 1 || (!class_exists('Imagick') && !extension_loaded('gd'))) {
+        return [];
+    }
+    $variants = [];
+    foreach ([360, 720, 1440] as $targetWidth) {
+        if ($targetWidth > $width && $variants !== []) {
+            continue;
+        }
+        $variantWidth = min($targetWidth, $width);
+        if (isset($variants[$variantWidth])) {
+            continue;
+        }
+        $destination = PUREBLOG_PLUS_DATA_PATH . '/' . $id . '-' . $variantWidth . '.webp';
+        if (!plus_write_webp_variant($source, $destination, $variantWidth)) {
+            continue;
+        }
+        $variants[$variantWidth] = [
+            'role' => 'variant', 'path' => $destination, 'name' => $id . '-' . $variantWidth . '.webp',
+            'mime_type' => 'image/webp', 'width' => $variantWidth,
+            'height' => (int) round($height * ($variantWidth / $width)),
+        ];
+    }
+    ksort($variants, SORT_NUMERIC);
+    return array_values($variants);
+}
+
+function plus_write_webp_variant(string $source, string $destination, int $targetWidth): bool
+{
+    if (class_exists('Imagick')) {
+        try {
+            $image = new Imagick($source);
+            $image->setIteratorIndex(0);
+            $image->autoOrient();
+            $image->thumbnailImage($targetWidth, 0, true);
+            $image->setImageFormat('webp');
+            $image->setImageCompressionQuality(82);
+            $image->stripImage();
+            $ok = $image->writeImage($destination);
+            $image->destroy();
+            return $ok && is_file($destination) && filesize($destination) > 0;
+        } catch (Throwable) {
+            @unlink($destination);
+            return false;
+        }
+    }
+    $info = @getimagesize($source);
+    $mime = (string) ($info['mime'] ?? '');
+    $loader = match ($mime) {
+        'image/jpeg' => 'imagecreatefromjpeg', 'image/png' => 'imagecreatefrompng',
+        'image/webp' => 'imagecreatefromwebp', 'image/avif' => 'imagecreatefromavif',
+        default => '',
+    };
+    if ($loader === '' || !function_exists($loader) || !function_exists('imagewebp')) {
+        return false;
+    }
+    $input = @$loader($source);
+    if ($input === false) {
+        return false;
+    }
+    $sourceWidth = imagesx($input);
+    $sourceHeight = imagesy($input);
+    $targetWidth = min($targetWidth, $sourceWidth);
+    $targetHeight = max(1, (int) round($sourceHeight * ($targetWidth / $sourceWidth)));
+    $output = imagecreatetruecolor($targetWidth, $targetHeight);
+    imagealphablending($output, false);
+    imagesavealpha($output, true);
+    $ok = imagecopyresampled($output, $input, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight)
+        && imagewebp($output, $destination, 82);
+    unset($input, $output);
+    return $ok && is_file($destination) && filesize($destination) > 0;
+}
+
+function plus_media_by_url(string $url): ?array
+{
+    if (!is_file(plus_database_path())) {
+        return null;
+    }
+    $statement = plus_database()->prepare('SELECT * FROM plus_media WHERE url=?');
+    $statement->execute([$url]);
+    $media = $statement->fetch();
+    if (!is_array($media)) {
+        return null;
+    }
+    $media['variants'] = json_decode((string) $media['variants_json'], true) ?: [];
+    $media['provider_data'] = json_decode((string) $media['provider_data_json'], true) ?: [];
+    return $media;
+}
+
+function plus_media_by_id(string $id): ?array
+{
+    if (preg_match('/^[a-f0-9]{32}$/', $id) !== 1 || !is_file(plus_database_path())) return null;
+    $statement = plus_database()->prepare('SELECT * FROM plus_media WHERE id=?');
+    $statement->execute([$id]);
+    $media = $statement->fetch();
+    if (!is_array($media)) return null;
+    $media['variants'] = json_decode((string) $media['variants_json'], true) ?: [];
+    $media['provider_data'] = json_decode((string) $media['provider_data_json'], true) ?: [];
+    return $media;
+}
+
+function plus_media_is_referenced(string $url, ?array $directories = null): bool
+{
+    $directories ??= [PUREBLOG_POSTS_PATH, PUREBLOG_PAGES_PATH];
+    foreach ($directories as $directory) {
+        if (!is_dir($directory)) continue;
+        foreach (glob($directory . '/*.md') ?: [] as $file) {
+            $raw = file_get_contents($file);
+            if (is_string($raw) && str_contains($raw, $url)) return true;
+        }
+    }
+    return false;
+}
+
+function plus_delete_media(string $id): bool
+{
+    $media = plus_media_by_id($id);
+    if ($media === null) return false;
+    if (plus_media_is_referenced((string) $media['url'])) {
+        throw new RuntimeException('Referenced media cannot be deleted.');
+    }
+    $plugin = plus_plugins()[(string) $media['provider_id']] ?? null;
+    $handler = $plugin['capabilities']['media.delete'] ?? null;
+    if (!is_callable($handler)) throw new RuntimeException('Media provider cannot delete this asset.');
+    $handler($media, plus_plugin_settings((string) $media['provider_id']));
+    $source = (string) $media['local_source'];
+    if (is_file($source) && !unlink($source)) throw new RuntimeException('Private media source could not be deleted.');
+    plus_database()->prepare('DELETE FROM plus_media WHERE id=?')->execute([$id]);
+    return true;
+}
+
+function plus_alt_suggestions_enabled(?array $config = null): bool
+{
+    $config ??= load_config();
+    $id = trim((string) ($config['plugins']['providers']['media.alt_suggestion'] ?? ''));
+    if ($id === '') return false;
+    try {
+        plus_plugin_provider('media.alt_suggestion', $id, $config);
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function plus_suggest_media_alt(string $url, string $context): string
+{
+    $media = plus_media_by_url($url);
+    if ($media === null || !str_starts_with((string) $media['mime_type'], 'image/')) {
+        throw new InvalidArgumentException('Unknown image.');
+    }
+    $provider = plus_plugin_provider('media.alt_suggestion');
+    $suggestion = ($provider['handler'])($media, mb_substr($context, 0, 2500), $provider['settings']);
+    $suggestion = trim(preg_replace('/\s+/u', ' ', (string) $suggestion) ?? '');
+    if ($suggestion === '') throw new RuntimeException('Alt-text suggestion was empty.');
+    return mb_substr($suggestion, 0, 1500);
+}
+
+/** @return list<array<string,mixed>> */
+function plus_media_list(int $limit = 5000, int $offset = 0): array
+{
+    if ($limit < 1 || $limit > 100000 || $offset < 0 || !is_file(plus_database_path())) {
+        return [];
+    }
+    $statement = plus_database()->prepare('SELECT * FROM plus_media ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?');
+    $statement->bindValue(1, $limit, PDO::PARAM_INT);
+    $statement->bindValue(2, $offset, PDO::PARAM_INT);
+    $statement->execute();
+    return $statement->fetchAll() ?: [];
+}
+
+/** @return list<array<string,mixed>> */
+function plus_media_referenced_by(string $content, string $featureImage = ''): array
+{
+    $result = [];
+    foreach (plus_media_list() as $media) {
+        $url = (string) $media['url'];
+        if (str_starts_with((string) $media['mime_type'], 'image/')
+            && ($featureImage === $url || str_contains($content, $url))) {
+            $result[] = $media;
+        }
+    }
+    return $result;
+}
+
+function plus_enhance_media_html(string $html): string
+{
+    if (!str_contains($html, '<img') || !is_file(plus_database_path())) {
+        return $html;
+    }
+    return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
+        $tag = $match[0];
+        if (!preg_match('/\ssrc=["\']([^"\']+)["\']/i', $tag, $source)) {
+            return $tag;
+        }
+        $media = plus_media_by_url(html_entity_decode($source[1], ENT_QUOTES));
+        if ($media === null) {
+            return $tag;
+        }
+        $variants = (array) $media['variants'];
+        $tag = preg_replace('/\s(?:srcset|sizes|width|height)=["\'][^"\']*["\']/i', '', $tag) ?? $tag;
+        $attributes = '';
+        if ((int) $media['width'] > 0 && (int) $media['height'] > 0) {
+            $attributes .= ' width="' . (int) $media['width'] . '" height="' . (int) $media['height'] . '"';
+        }
+        if ($variants !== []) {
+            ksort($variants, SORT_NUMERIC);
+            $sources = [];
+            foreach ($variants as $width => $url) {
+                $sources[] = e((string) $url) . ' ' . (int) $width . 'w';
+            }
+            $attributes .= ' srcset="' . implode(', ', $sources) . '" sizes="(max-width: 720px) calc(100vw - 32px), 680px"';
+        }
+        return preg_replace('/^<img\b/i', '<img' . $attributes, $tag) ?? $tag;
+    }, $html) ?? $html;
+}
+
+plus_register_capability('media.pipeline', 1, 0);

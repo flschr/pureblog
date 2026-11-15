@@ -58,41 +58,7 @@ if (empty($errors) && isset($_FILES['image'])) {
     }
 }
 
-$folder = $slug;
 if (empty($errors)) {
-    if (!is_safe_image_slug($folder)) {
-        $errors[] = t('admin.editor.error_upload_invalid_slug');
-    }
-}
-
-if (empty($errors)) {
-    $baseDir = realpath(__DIR__ . '/../content/images');
-    $uploadDir = __DIR__ . '/../content/images/' . $folder;
-
-    if ($baseDir !== false && !is_file($baseDir . '/.htaccess')) {
-        file_put_contents($baseDir . '/.htaccess', "<FilesMatch \"\.ph(p[0-9]?|tml)$\">\n    Require all denied\n</FilesMatch>\n");
-    }
-
-    if ($baseDir === false) {
-        $errors[] = t('admin.editor.error_image_folder_missing');
-    } elseif (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
-        $errors[] = t('admin.editor.error_upload_folder_create');
-    } elseif (!validate_image_path($baseDir, $uploadDir)) {
-        @rmdir($uploadDir);
-        $errors[] = t('admin.editor.error_image_invalid_path');
-    }
-}
-
-if (empty($errors)) {
-    $allowedTypes = [
-        'image/jpeg' => 'jpg',
-        'image/png'  => 'png',
-        'image/gif'  => 'gif',
-        'image/webp' => 'webp',
-        'image/avif' => 'avif',
-    ];
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-
     foreach ($fileList as $file) {
         if ($file['error'] !== UPLOAD_ERR_OK) {
             $uploadErr = $file['error'];
@@ -109,49 +75,15 @@ if (empty($errors)) {
             continue;
         }
 
-        $mimeType = $finfo->file($file['tmp_name']) ?: '';
-        if (!isset($allowedTypes[$mimeType])) {
-            $errors[] = t('admin.editor.error_upload_type') . ' (' . htmlspecialchars($file['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ')';
-            continue;
+        try {
+            $media = plus_store_uploaded_media($file, true, null, 'image');
+            $altText = pathinfo(basename((string) $file['name']), PATHINFO_FILENAME) ?: 'image';
+            $messages[] = '![' . str_replace([']', "\r", "\n"], ['\\]', ' ', ' '], $altText) . '](' . $media['url'] . ')';
+        } catch (Throwable $error) {
+            $errors[] = $error instanceof InvalidArgumentException
+                ? $error->getMessage()
+                : t('admin.editor.error_upload_save') . ' (' . e((string) $file['name']) . ')';
         }
-
-        $uploadedFilename = basename($file['name']);
-        $uploadedFilename = preg_replace('/[^a-zA-Z0-9._-]/', '-', $uploadedFilename) ?? $uploadedFilename;
-        $uploadedFilename = preg_replace('/-+/', '-', $uploadedFilename) ?? $uploadedFilename;
-        $uploadedFilename = trim($uploadedFilename, '-');
-
-        $expectedExt = $allowedTypes[$mimeType];
-        $baseName = pathinfo($uploadedFilename, PATHINFO_FILENAME);
-        $baseName = str_replace('.', '-', $baseName);
-        $filename = $baseName . '.' . $expectedExt;
-
-        if ($filename === '') {
-            $errors[] = t('admin.editor.error_upload_invalid_name');
-            continue;
-        }
-
-        if (is_file($uploadDir . '/' . $filename)) {
-            $errors[] = t('admin.editor.error_upload_duplicate', ['filename' => $filename]);
-            continue;
-        }
-
-        $destination = $uploadDir . '/' . $filename;
-        if (!move_uploaded_file($file['tmp_name'], $destination)) {
-            $errors[] = t('admin.editor.error_upload_save') . ' (' . htmlspecialchars($filename, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ')';
-            continue;
-        }
-
-        strip_image_metadata($destination, $mimeType);
-        call_hook('on_image_uploaded', [$destination]);
-        $webpDestination = preg_replace('/\.[^.]+$/', '.webp', $destination) ?? $destination;
-        if ($webpDestination !== $destination && file_exists($webpDestination)) {
-            $destination = $webpDestination;
-        }
-        $filename = basename($destination);
-        generate_image_thumbnail($destination, $uploadDir . '/thumbs/' . $filename);
-        $url = base_path() . '/content/images/' . $folder . '/' . $filename;
-        $altText = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
-        $messages[] = '![' . $altText . '](' . $url . ')';
     }
 }
 

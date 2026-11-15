@@ -418,6 +418,7 @@ return [
                 'site'    => 'Blog',
                 'theme'   => 'Design', // ENGLISH PLACEHOLDER
                 'css'     => 'CSS',
+                'plugins' => 'Plugins',
                 'user'    => 'Benutzer',
                 'updates' => 'Updates',
                 'save'    => 'Einstellungen speichern',
@@ -642,6 +643,41 @@ return [
                 'placeholder_admin' => 'Eigenes CSS für die Admin-Oberfläche hinzufügen …',
             ],
 
+
+            'plugins' => [
+                'page_title' => 'Plugins – Pure Blog Plus',
+                'heading' => 'Plugins',
+                'intro' => 'Wähle die mitgelieferten Provider für diese Website. Lokale Medien funktionieren weiterhin ohne externen Dienst.',
+                'section_providers' => 'Aktive Provider',
+                'storage_provider' => 'Medienspeicher',
+                'alt_provider' => 'Alt-Text-Vorschläge',
+                'none' => 'Keine',
+                'enabled' => 'Aktiviert',
+                'required' => 'Erforderlicher lokaler Rückfallweg',
+                'notice_saved' => 'Plugin-Einstellungen aktualisiert.',
+                'error_save' => 'Plugin-Einstellungen konnten nicht gespeichert werden.',
+                'error_provider' => 'Der ausgewählte Provider ist ungültig oder deaktiviert.',
+                'error_required' => '{field} ist für {plugin} erforderlich.',
+                'error_url' => '{field} muss eine gültige HTTPS-URL sein.',
+                'secret_preserved' => 'Leer lassen, um das gespeicherte Geheimnis beizubehalten.',
+                'bundled' => [
+                    'local_media' => [
+                        'name' => 'Lokale Medien',
+                        'description' => 'Speichert Originale und responsive Varianten auf diesem Server.',
+                    ],
+                    's3_media' => [
+                        'name' => 'S3-kompatible Medien',
+                        'description' => 'Speichert Medien in einem S3-kompatiblen Bucket und liefert sie über eine konfigurierte öffentliche URL aus.',
+                        'endpoint' => 'S3-Endpunkt', 'region' => 'Region', 'bucket' => 'Bucket',
+                        'access_key' => 'Zugriffsschlüssel', 'secret_key' => 'Geheimer Schlüssel', 'public_base_url' => 'Öffentliche Medien-URL',
+                    ],
+                    'openai_alt' => [
+                        'name' => 'OpenAI-Alt-Text-Vorschläge',
+                        'description' => 'Erstellt bearbeitbare Alt-Text-Vorschläge. Bilder und redaktioneller Kontext werden an die konfigurierte API gesendet.',
+                        'api_key' => 'API-Schlüssel', 'model' => 'Modell', 'language' => 'Ausgabesprache',
+                    ],
+                ],
+            ],
 
             'updates' => [
                 'page_title'            => 'Updates – Pure Blog',

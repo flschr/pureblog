@@ -98,6 +98,11 @@ function pureblog_plus_protected_release_files(): array
         'includes/plus/jobs.php',
         'includes/plus/job-runner.php',
         'includes/plus/capabilities.php',
+        'includes/plus/plugins.php',
+        'includes/plus/media.php',
+        'includes/plugins/local-media.php',
+        'includes/plugins/s3-media.php',
+        'includes/plugins/openai-alt-text.php',
         'includes/plus/indieauth.php',
         'includes/plus/indieauth-client.php',
         'includes/plus/indieauth-tokens.php',
@@ -111,6 +116,9 @@ function pureblog_plus_protected_release_files(): array
         'micropub/media.php',
         'webmention/index.php',
         'admin/webmentions.php',
+        'admin/settings-plugins.php',
+        'admin/media-alt-text.php',
+        'admin/delete-media.php',
     ];
 }
 
@@ -160,6 +168,9 @@ function validate_pureblog_plus_package(string $sourceRoot, string $releaseTag):
         'includes/plus/jobs.php',
         'includes/plus/job-runner.php',
         'includes/plus/capabilities.php',
+        'includes/plus/plugins.php',
+        'includes/plus/media.php',
+        'includes/plugins',
         PUREBLOG_PLUS_RELEASE_MANIFEST,
     ];
     foreach ($requiredPaths as $relative) {

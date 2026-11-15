@@ -13,6 +13,7 @@ function render_markdown(string $markdown, array $context = []): string
 
     $html = $parsedown->text($markdown);
     $html = apply_filter('on_render_markdown', $html, $context);
+    $html = plus_enhance_media_html($html);
     $html = add_lazy_loading_to_images($html);
 
     return restore_private_use_emoji($html);
@@ -88,7 +89,7 @@ function render_post_media(array $post): string
             }
         }
     }
-    return implode("\n", $html);
+    return plus_enhance_media_html(implode("\n", $html));
 }
 
 function restore_private_use_emoji(string $html): string
