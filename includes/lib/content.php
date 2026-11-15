@@ -1096,6 +1096,7 @@ function save_page(array &$page, ?string $originalSlug = null, ?string $original
     get_all_pages(true, true);
     build_search_index();
     cache_clear();
+    webmention_sender_content_saved('page', $page, $originalSlug, $originalStatus);
     return true;
 }
 
@@ -1110,6 +1111,7 @@ function delete_page_by_slug(string $slug): bool
     if (!$deleted) {
         return false;
     }
+    webmention_sender_content_deleted('page', $slug);
 
     $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
     if (is_dir($imageDir)) {
@@ -1187,6 +1189,7 @@ function delete_post_by_slug(string $slug): bool
 
     $deleted = unlink($path);
     if ($deleted) {
+        webmention_sender_content_deleted('post', $slug);
         $imageDir = PUREBLOG_CONTENT_IMAGES_PATH . '/' . $slug;
         if (is_dir($imageDir)) {
             $thumbDir = $imageDir . '/thumbs';
@@ -1386,6 +1389,7 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
             call_hook('on_post_published', [$slug]);
         }
     }
+    webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
     return true;
 }
 

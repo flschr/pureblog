@@ -5,7 +5,7 @@
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
-        "includes/plus/runtime.php": "305dc2765cf7edc251e94c2e8976fd7d0c7f445ec484d072d7f7063703a36423",
+        "includes/plus/runtime.php": "4b25a3b0874c9690c642629620c1c55f1c6b825e1112260abe669c6403f0642b",
         "includes/plus/migrations.php": "23a0fbec6e79eb8ec6bfc516ce259fd4c6e170b024aadb7301443f10a55a40a2",
         "includes/plus/jobs.php": "54dbfe508a8d875815ebf65f8a202b1fc71f8c3e0db71ee21832902bbfdb48b6",
         "includes/plus/job-runner.php": "dd1169119a7b878ee4060bbd92f7d35cb9e5d345099dfc21670ae9ca9dda5daa",
@@ -15,12 +15,13 @@
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
         "includes/plus/micropub.php": "d7ac9640cc4319c83f2542a3561b76cd565b3c7506614d3b5a66df188d7bb2ef",
         "includes/plus/webmentions.php": "242fd64a034304f7b0447cf08c30f7940228cf2c397b6805919d56005165e8ed",
+        "includes/plus/webmention-sender.php": "28b49c0969ea6e7bfc814b4cfc5760ea4cfd0f5e507c46a860e1056aa054813d",
         "indieauth/authorize.php": "4932114aac5c1acd6ec03369faee8c90c244fe674bc7a2dfe4901aedb83f17b5",
         "indieauth/metadata.php": "37bd70916cf6aa75596586c00211a053d184b54d3e803137a3e799f898a0b4c8",
         "indieauth/token.php": "be198c7fefcf750cb7d08159348f88d9a5777fc22ca722d51d9e4287b0ce02a2",
         "micropub/index.php": "630b27bc077aa141b4e566f69888ab640088f8495194b74385e417791c72a6ad",
         "micropub/media.php": "5514743392060efe6b5fedb7c7761ec68d44983fa65eedf7bee9d17c863f3612",
         "webmention/index.php": "af25bb550b72eca26cff9af60e2b0267f648f51a7748afa786b9ba9b70108458",
-        "admin/webmentions.php": "a367d817efb0df479bf9f947128befff54c916a4f69731be2c28a870069d6af9"
+        "admin/webmentions.php": "39cbc78028ec837c665a53d2bc13348ca8c6284670dac5ade9f3053408723727"
     }
 }
