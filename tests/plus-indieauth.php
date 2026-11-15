@@ -190,6 +190,9 @@ try {
     $_POST['access_token'] = 'form-token';
     indieauth_test_assert(indieauth_bearer_token() === 'header-token', 'Bearer header did not take precedence.');
     unset($_SERVER['HTTP_AUTHORIZATION']);
+    $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] = 'Bearer forwarded-token';
+    indieauth_test_assert(indieauth_bearer_token() === 'forwarded-token', 'Forwarded bearer header was not accepted.');
+    unset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
     indieauth_test_assert(indieauth_bearer_token() === 'form-token', 'Form bearer token was not accepted.');
 
     echo "PASS: IndieAuth discovery contract, clients, PKCE, one-time codes, hashed tokens, scopes, and revocation\n";

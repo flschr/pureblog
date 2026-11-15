@@ -28,7 +28,7 @@ if ($slug !== '') {
         } elseif (!empty($post['description'])) {
             $title = trim((string) $post['description']);
         } elseif (!empty($post['content'])) {
-            $cleanContent = trim(strip_tags(render_markdown((string) $post['content'])));
+            $cleanContent = trim(strip_tags(render_post_content($post)));
             $title = $cleanContent !== '' ? mb_substr($cleanContent, 0, 120) : $slug;
         } else {
             $title = $slug;

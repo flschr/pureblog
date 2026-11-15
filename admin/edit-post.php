@@ -92,6 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id'])) 
     $originalStatus = trim($_POST['original_status'] ?? '');
     $originalDate = trim($_POST['original_date'] ?? '');
 
+    if (is_array($originalExisting)) {
+        foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_syndication'] as $fieldName) {
+            if (array_key_exists($fieldName, $originalExisting)) {
+                $post[$fieldName] = $originalExisting[$fieldName];
+            }
+        }
+    }
+
     $post['layout_fields'] = [];
     foreach ($_POST as $key => $value) {
         if (str_starts_with($key, 'layout_field__')) {

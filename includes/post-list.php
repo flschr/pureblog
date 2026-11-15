@@ -19,17 +19,22 @@ $paginationQueryParams = (isset($paginationQueryParams) && is_array($paginationQ
             <!-- Excerpt view -->
             <?php if ($postListLayout === 'excerpt'): ?>
                 <div class="excerpt-view">
-                    <h2><a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><?= e($post['title']) ?></a></h2>
+                    <?php if (!post_is_note($post)): ?><h2><a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><?= e($post['title']) ?></a></h2><?php endif; ?>
                     <?php if (!empty($post['date'])): ?>
-                        <p><svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> <time datetime="<?= e(format_datetime_for_display((string) $post['date'], $config ?? [], 'c')) ?>"><?= e(format_post_date_for_display((string) $post['date'], $config ?? [])) ?></time></p>
+                        <p><svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> <a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><time datetime="<?= e(format_datetime_for_display((string) $post['date'], $config ?? [], 'c')) ?>"><?= e(format_post_date_for_display((string) $post['date'], $config ?? [])) ?></time></a></p>
                     <?php endif; ?>
-                    <?php
-                    $excerptSource = trim((string) ($post['description'] ?? ''));
-                    if ($excerptSource === '') {
-                        $excerptSource = get_excerpt($post['content']);
-                    }
-                    ?>
-                    <p class="post-excerpt"><?= e($excerptSource) ?></p>
+                    <?php if (post_is_note($post)): ?>
+                        <?= render_post_media($post) ?>
+                        <?= render_post_content($post) ?>
+                    <?php else: ?>
+                        <?php
+                        $excerptSource = trim((string) ($post['description'] ?? ''));
+                        if ($excerptSource === '') {
+                            $excerptSource = get_excerpt($post['content']);
+                        }
+                        ?>
+                        <p class="post-excerpt"><?= e($excerptSource) ?></p>
+                    <?php endif; ?>
                     <?php if (!empty($post['tags'])): ?>
                         <p class="tag-list"><svg class="icon" aria-hidden="true"><use href="#icon-tag"></use></svg> <?= render_tag_links($post['tags']) ?></p>
                     <?php endif; ?>
@@ -38,11 +43,12 @@ $paginationQueryParams = (isset($paginationQueryParams) && is_array($paginationQ
             <!-- Full post view -->
             <?php elseif ($postListLayout === 'full'): ?>
                 <div class="full-post-view">
-                    <h2><a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><?= e($post['title']) ?></a></h2>
+                    <?php if (!post_is_note($post)): ?><h2><a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><?= e($post['title']) ?></a></h2><?php endif; ?>
                     <?php if (!empty($post['date'])): ?>
-                        <p class="post-date"><svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> <time datetime="<?= e(format_datetime_for_display((string) $post['date'], $config ?? [], 'c')) ?>"><?= e(format_post_date_for_display((string) $post['date'], $config ?? [])) ?></time></p>
+                        <p class="post-date"><svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg> <a href="<?= base_path() ?>/<?= e($post['slug']) ?>"><time datetime="<?= e(format_datetime_for_display((string) $post['date'], $config ?? [], 'c')) ?>"><?= e(format_post_date_for_display((string) $post['date'], $config ?? [])) ?></time></a></p>
                     <?php endif; ?>
-                    <?= render_markdown($post['content'], ['post_title' => (string) ($post['title'] ?? '')]) ?>
+                    <?= render_post_media($post) ?>
+                    <?= render_post_content($post) ?>
                     <?php if (!empty($post['tags'])): ?>
                         <p class="tag-list"><svg class="icon" aria-hidden="true"><use href="#icon-tag"></use></svg> <?= render_tag_links($post['tags']) ?></p>
                     <?php endif; ?>

@@ -1325,6 +1325,12 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
         $frontMatter['feature_image'] = $featureImage;
     }
 
+    foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_syndication'] as $fieldName) {
+        if (isset($post[$fieldName]) && trim((string) $post[$fieldName]) !== '') {
+            $frontMatter[$fieldName] = trim((string) $post[$fieldName]);
+        }
+    }
+
     foreach ($layoutFields as $fieldName => $fieldValue) {
         $fieldName = trim((string) $fieldName);
         if ($fieldName !== '') {

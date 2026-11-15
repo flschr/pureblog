@@ -18,6 +18,52 @@ function render_markdown(string $markdown, array $context = []): string
     return restore_private_use_emoji($html);
 }
 
+function post_is_note(array $post): bool
+{
+    return ($post['micropub_kind'] ?? '') === 'note';
+}
+
+function render_post_content(array $post): string
+{
+    $content = (string) ($post['content'] ?? '');
+    if (($post['micropub_content_format'] ?? '') === 'text') {
+        $paragraphs = preg_split('/\n{2,}/', trim($content)) ?: [];
+        return implode("\n", array_map(
+            static fn(string $paragraph): string => '<p>' . nl2br(e($paragraph), false) . '</p>',
+            $paragraphs
+        ));
+    }
+    return render_markdown($content, ['post_title' => (string) ($post['title'] ?? '')]);
+}
+
+function render_post_media(array $post): string
+{
+    $html = [];
+    foreach (['photo', 'video', 'audio'] as $type) {
+        $raw = (string) ($post['micropub_' . $type] ?? '');
+        $values = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($values)) {
+            continue;
+        }
+        foreach ($values as $value) {
+            $url = is_string($value) ? $value : (is_array($value) ? (string) ($value['value'] ?? '') : '');
+            $alt = is_array($value) ? (string) ($value['alt'] ?? '') : '';
+            $parts = parse_url($url);
+            if (!is_array($parts) || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)) {
+                continue;
+            }
+            if ($type === 'photo') {
+                $html[] = '<figure><img loading="lazy" src="' . e($url) . '" alt="' . e($alt) . '"></figure>';
+            } elseif ($type === 'video') {
+                $html[] = '<video controls preload="metadata" src="' . e($url) . '"></video>';
+            } else {
+                $html[] = '<audio controls preload="metadata" src="' . e($url) . '"></audio>';
+            }
+        }
+    }
+    return implode("\n", $html);
+}
+
 function restore_private_use_emoji(string $html): string
 {
     if (!preg_match('/[\x{F000}-\x{F8FF}]/u', $html)) {

@@ -172,7 +172,7 @@ function indieauth_list_access_tokens(): array
 
 function indieauth_bearer_token(): string
 {
-    $header = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+    $header = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
     if (preg_match('/^Bearer\s+([^\s]+)$/i', $header, $matches) === 1) {
         return $matches[1];
     }

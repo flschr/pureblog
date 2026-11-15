@@ -81,7 +81,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
             <?php
             $postUrl = $baseUrl . '/' . $post['slug'];
             $pubDate = format_post_date_for_rss((string) ($post['date'] ?? ''), $config);
-            $content = render_markdown($post['content'], ['post_title' => (string) ($post['title'] ?? '')]);
+            $content = render_post_media($post) . render_post_content($post);
             $content = absolutize_feed_html($content, $baseUrl, $postUrl);
             $content = preg_replace('/[^\x{0009}\x{000a}\x{000d}\x{0020}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', $content);
             ?>
