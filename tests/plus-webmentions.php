@@ -99,6 +99,7 @@ try {
     $invalidId = (int) $database->lastInsertId();
     webmention_verify($invalidId, static fn(string $url): array => $withoutLink, 1060);
     webmention_test_assert(webmention_get($invalidId)['status'] === 'invalid', 'New source without a link was not marked invalid.');
+    webmention_test_assert(count(webmention_list(null, 1)) === 1, 'Webmention inbox list limit was not applied.');
 
     $firstJob = webmention_enqueue_verification($invalidId, 1070);
     $duplicateJob = webmention_enqueue_verification($invalidId, 1070);

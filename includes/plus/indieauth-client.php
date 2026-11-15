@@ -75,6 +75,10 @@ function indieauth_validate_redirect_uri(string $redirectUri): string
 
 function indieauth_resolve_url_reference(string $baseUrl, string $reference): string
 {
+    $reference = trim($reference);
+    if ($reference === '') {
+        return $baseUrl;
+    }
     if (parse_url($reference, PHP_URL_SCHEME) !== null) {
         return $reference;
     }
@@ -82,13 +86,48 @@ function indieauth_resolve_url_reference(string $baseUrl, string $reference): st
     if (!is_array($base) || empty($base['scheme']) || empty($base['host'])) {
         return $reference;
     }
-    $origin = indieauth_url_origin($baseUrl);
-    if (str_starts_with($reference, '/')) {
-        return $origin . $reference;
+    $scheme = strtolower((string) $base['scheme']);
+    if (str_starts_with($reference, '//')) {
+        return $scheme . ':' . $reference;
     }
-    $path = (string) ($base['path'] ?? '/');
-    $directory = rtrim(str_replace('\\', '/', dirname($path)), '/');
-    return $origin . ($directory === '' ? '' : $directory) . '/' . $reference;
+    $origin = indieauth_url_origin($baseUrl);
+    if (str_starts_with($reference, '#')) {
+        return preg_replace('/#.*$/', '', $baseUrl) . $reference;
+    }
+    if (str_starts_with($reference, '?')) {
+        return preg_replace('/[?#].*$/', '', $baseUrl) . $reference;
+    }
+    $fragment = '';
+    $fragmentPosition = strpos($reference, '#');
+    if ($fragmentPosition !== false) {
+        $fragment = substr($reference, $fragmentPosition);
+        $reference = substr($reference, 0, $fragmentPosition);
+    }
+    $query = '';
+    $queryPosition = strpos($reference, '?');
+    if ($queryPosition !== false) {
+        $query = substr($reference, $queryPosition);
+        $reference = substr($reference, 0, $queryPosition);
+    }
+    if (str_starts_with($reference, '/')) {
+        $path = $reference;
+    } else {
+        $basePath = (string) ($base['path'] ?? '/');
+        $directory = substr($basePath, 0, (int) strrpos($basePath, '/') + 1);
+        $path = $directory . $reference;
+    }
+    $segments = [];
+    foreach (explode('/', str_replace('\\', '/', $path)) as $segment) {
+        if ($segment === '' || $segment === '.') {
+            continue;
+        }
+        if ($segment === '..') {
+            array_pop($segments);
+            continue;
+        }
+        $segments[] = $segment;
+    }
+    return $origin . '/' . implode('/', $segments) . $query . $fragment;
 }
 
 function indieauth_url_origin(string $url): string
@@ -100,7 +139,8 @@ function indieauth_url_origin(string $url): string
     $scheme = strtolower((string) $parts['scheme']);
     $host = strtolower((string) $parts['host']);
     $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
-    return $scheme . '://' . $host . $port;
+    $hostForUrl = str_contains($host, ':') ? '[' . $host . ']' : $host;
+    return $scheme . '://' . $hostForUrl . $port;
 }
 
 function indieauth_is_public_ip(string $ip): bool
@@ -174,6 +214,7 @@ function indieauth_safe_http_get(string $url): array
             CURLOPT_TIMEOUT => 5,
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_PROXY => '',
             CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $resolvedIp],
             CURLOPT_HTTPHEADER => ['Accept: application/json, text/html;q=0.8', 'User-Agent: PureBlog-Plus-IndieAuth'],
             CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
