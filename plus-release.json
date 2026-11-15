@@ -14,13 +14,13 @@
         "includes/plus/indieauth-client.php": "3b5b5ba211e7dcf372c17e8fb31c734a9e55b007c87d21653a76a95040090f47",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
         "includes/plus/micropub.php": "a0d21ce08f81ad640f642a48c462ffa7f5bb880b8e5e6e6619dfd5926364d8f4",
-        "includes/plus/webmentions.php": "9b6155c094352f1ea1120870322d0e76a98b6122be999869208b7b79c1918ad9",
+        "includes/plus/webmentions.php": "eeac36b91790a14cc9a310aa4dd2281e390664016b42bd13a9a60e4587f63bcb",
         "indieauth/authorize.php": "4932114aac5c1acd6ec03369faee8c90c244fe674bc7a2dfe4901aedb83f17b5",
         "indieauth/metadata.php": "37bd70916cf6aa75596586c00211a053d184b54d3e803137a3e799f898a0b4c8",
         "indieauth/token.php": "be198c7fefcf750cb7d08159348f88d9a5777fc22ca722d51d9e4287b0ce02a2",
         "micropub/index.php": "630b27bc077aa141b4e566f69888ab640088f8495194b74385e417791c72a6ad",
         "micropub/media.php": "5514743392060efe6b5fedb7c7761ec68d44983fa65eedf7bee9d17c863f3612",
         "webmention/index.php": "af25bb550b72eca26cff9af60e2b0267f648f51a7748afa786b9ba9b70108458",
-        "admin/webmentions.php": "059a96b7927a163fe5d6537ea8f8f0f16f20b6af10c77bd920591a02dacd8fad"
+        "admin/webmentions.php": "b5a05d43ed50af5c2a98362f8cbee5dd360f5f20e1995fb57ef4ae0c9408db97"
     }
 }
