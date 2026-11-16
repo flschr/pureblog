@@ -121,7 +121,7 @@ function social_default_announcement_template(): string
 function social_validate_announcement_template(string $template): string
 {
     $template = trim(str_replace(["\r\n", "\r"], "\n", $template));
-    if ($template === '') return social_default_announcement_template();
+    if ($template === '') return '';
     if (mb_strlen($template) > 2000) {
         throw new InvalidArgumentException(t('admin.settings.social.announcement_template_too_long'));
     }
@@ -138,13 +138,21 @@ function social_validate_announcement_template(string $template): string
 
 function social_announcement_template(?array $connection = null): string
 {
+    $configured = social_configured_announcement_template($connection);
+    return $configured !== '' ? $configured : social_default_announcement_template();
+}
+
+function social_configured_announcement_template(?array $connection = null): string
+{
     $connection ??= social_connection();
     return social_validate_announcement_template((string) ($connection['announcement_template'] ?? ''));
 }
 
 function social_render_announcement(string $template, string $title, string $url): string
 {
-    return trim(strtr(social_validate_announcement_template($template), [
+    $template = social_validate_announcement_template($template);
+    if ($template === '') $template = social_default_announcement_template();
+    return trim(strtr($template, [
         '{title}' => trim($title),
         '{url}' => trim($url),
     ]));
@@ -449,19 +457,21 @@ function social_retry_revocation(int $id): void
 
 function social_set_public_enabled(bool $enabled, ?int $now = null): void
 {
-    social_set_settings($enabled, social_announcement_template(), $now);
+    social_set_settings($enabled, social_configured_announcement_template(), $now);
 }
 
 function social_set_settings(bool $publicEnabled, string $announcementTemplate, ?int $now = null): void
 {
     $now ??= time();
     $announcementTemplate = social_validate_announcement_template($announcementTemplate);
+    $connection = social_connection();
+    $publicVisibilityChanged = !empty($connection['public_enabled']) !== $publicEnabled;
     plus_database()->prepare(
         'INSERT INTO plus_social_connection (id,public_enabled,announcement_template,updated_at) VALUES (1,?,?,?) '
         . 'ON CONFLICT(id) DO UPDATE SET public_enabled=excluded.public_enabled,'
         . 'announcement_template=excluded.announcement_template,updated_at=excluded.updated_at'
     )->execute([$publicEnabled ? 1 : 0, $announcementTemplate, $now]);
-    cache_clear();
+    if ($publicVisibilityChanged) cache_clear();
 }
 
 function social_syndication_targets(): array

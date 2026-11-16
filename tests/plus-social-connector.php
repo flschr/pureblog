@@ -23,6 +23,14 @@ $revokeFails = false;
 
 try {
     require dirname(__DIR__) . '/functions.php';
+    $legacyDatabase = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $legacyDatabase->exec('CREATE TABLE plus_social_connection (id INTEGER PRIMARY KEY,public_enabled INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL)');
+    $legacyDatabase->exec('INSERT INTO plus_social_connection (id,public_enabled,updated_at) VALUES (1,1,1000)');
+    ($GLOBALS['_pureblog_plus_migrations']['0011_social_announcement_template'])($legacyDatabase);
+    social_test_assert(
+        $legacyDatabase->query('SELECT announcement_template FROM plus_social_connection WHERE id=1')->fetchColumn() === '',
+        'Existing social settings did not inherit the default announcement template during migration.'
+    );
     $GLOBALS['_pureblog_social_public_ips'] = static fn(string $host): array => ['203.0.113.10'];
     $GLOBALS['_pureblog_social_media_archiver'] = static function (string $url): string {
         if (str_contains($url, 'broken')) throw new RuntimeException('Synthetic archive failure.');
@@ -139,7 +147,9 @@ try {
         && ($requests[array_key_last($requests)][2]['form']['status'] ?? '') === "New on the blog: Renamed post\nhttp://localhost/new-post\nComments welcome.",
         'Changed announcement template was not rendered and updated in place.'
     );
-    social_test_assert(social_validate_announcement_template('') === social_default_announcement_template(), 'Empty announcement template did not restore the default.');
+    social_set_settings(true, '', 1304);
+    social_test_assert(social_configured_announcement_template() === '', 'Empty announcement template was duplicated into persisted settings.');
+    social_test_assert(social_announcement_template() === social_default_announcement_template(), 'Empty announcement template did not inherit the default.');
     foreach ([['Only {title}', 'must contain'], ['{title} {unknown} {url}', 'unknown placeholder']] as [$invalidTemplate, $expectedError]) {
         try {
             social_validate_announcement_template($invalidTemplate);

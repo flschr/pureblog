@@ -80,6 +80,20 @@ try {
     micropub_test_assert($nativeMapped['layout'] === 'essay' && $nativeMapped['feature_image'] !== '', 'Native presentation fields were not preserved.');
     micropub_test_assert($nativeMapped['layout_fields']['custom_byline'] === 'Rene', 'Custom front matter was not preserved.');
 
+    plus_database()->prepare(
+        'INSERT INTO plus_social_connection (id,instance_url,access_token,account_id,account_name,updated_at) VALUES (1,?,?,?,?,?)'
+    )->execute(['https://social.example', 'access-token', 'account-1', 'rene@social.example', 1000]);
+    [$syndicatedProperties, $syndicatedCommands] = micropub_parse_create([
+        'type' => ['h-entry'],
+        'properties' => [
+            'name' => ['Syndicated article'],
+            'content' => ['Published from OutPost'],
+            'mp-syndicate-to' => ['https://social.example'],
+        ],
+    ], true);
+    $syndicatedPost = micropub_properties_to_post($syndicatedProperties, $syndicatedCommands);
+    micropub_test_assert(!empty($syndicatedPost['social_announce']), 'JSON mp-syndicate-to did not select the connected social announcement path.');
+
     $draftPost = array_replace($nativePost, ['status' => 'draft']);
     $draftProperties = micropub_post_to_properties($draftPost);
     unset($draftProperties['post-status']);
