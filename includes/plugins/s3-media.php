@@ -132,7 +132,7 @@ function plus_s3_request(
     if ($uploadPath !== null) {
         $uploadStream = fopen($uploadPath, 'rb');
         if ($uploadStream === false) {
-            curl_close($handle);
+            unset($handle);
             throw new RuntimeException('Unable to open the S3 upload source.');
         }
     }
@@ -164,7 +164,7 @@ function plus_s3_request(
     $response = curl_exec($handle);
     $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
     $error = curl_error($handle);
-    curl_close($handle);
+    unset($handle);
     if (is_resource($uploadStream)) fclose($uploadStream);
     if ($tooLarge || $response === false || $status < 200 || $status >= 300) {
         throw new RuntimeException($error !== '' ? $error : 'S3 media request returned HTTP ' . $status . '.');

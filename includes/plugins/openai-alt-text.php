@@ -70,7 +70,7 @@ function plus_openai_alt_text_suggest(array $media, string $context, array $sett
     ]);
     $completed = curl_exec($handle);
     $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-    curl_close($handle);
+    unset($handle);
     if ($completed !== true || $tooLarge || $status !== 200) {
         throw new RuntimeException('Alt-text suggestion is unavailable.');
     }

@@ -241,7 +241,7 @@ function indieauth_safe_http_get(string $url): array
         $completed = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
+        unset($ch);
         if ($tooLarge) {
             return ['ok' => false, 'error' => 'Client metadata response is too large.'];
         }

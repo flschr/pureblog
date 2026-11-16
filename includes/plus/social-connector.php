@@ -226,7 +226,7 @@ function social_http_request(string $method, string $url, array $options = []): 
     $executed = curl_exec($handle);
     $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
     $error = $executed === false ? curl_error($handle) : '';
-    curl_close($handle);
+    unset($handle);
     if (is_resource($destinationStream)) fclose($destinationStream);
     if ($tooLarge) $error = 'Social response exceeded the size limit.';
     return ['ok' => $executed !== false && !$tooLarge && $status >= 200 && $status < 300, 'status' => $status, 'body' => $body, 'headers' => $responseHeaders, 'error' => $error];
