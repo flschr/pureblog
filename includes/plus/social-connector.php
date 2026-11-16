@@ -109,6 +109,55 @@ plus_register_migration('0010_social_revocations', static function (PDO $databas
     );
 });
 
+plus_register_migration('0011_social_announcement_template', static function (PDO $database): void {
+    $database->exec('ALTER TABLE plus_social_connection ADD COLUMN announcement_template TEXT NOT NULL DEFAULT \'\'');
+});
+
+function social_default_announcement_template(): string
+{
+    return "{title}\n\n{url}";
+}
+
+function social_validate_announcement_template(string $template): string
+{
+    $template = trim(str_replace(["\r\n", "\r"], "\n", $template));
+    if ($template === '') return '';
+    if (mb_strlen($template) > 2000) {
+        throw new InvalidArgumentException(t('admin.settings.social.announcement_template_too_long'));
+    }
+    preg_match_all('/\{([a-zA-Z][a-zA-Z0-9_-]*)\}/', $template, $matches);
+    $unknown = array_values(array_diff(array_unique($matches[1] ?? []), ['title', 'url']));
+    if ($unknown !== []) {
+        throw new InvalidArgumentException(t('admin.settings.social.announcement_template_unknown', ['placeholder' => '{' . $unknown[0] . '}']));
+    }
+    if (!str_contains($template, '{url}')) {
+        throw new InvalidArgumentException(t('admin.settings.social.announcement_template_url_required'));
+    }
+    return $template;
+}
+
+function social_announcement_template(?array $connection = null): string
+{
+    $configured = social_configured_announcement_template($connection);
+    return $configured !== '' ? $configured : social_default_announcement_template();
+}
+
+function social_configured_announcement_template(?array $connection = null): string
+{
+    $connection ??= social_connection();
+    return social_validate_announcement_template((string) ($connection['announcement_template'] ?? ''));
+}
+
+function social_render_announcement(string $template, string $title, string $url): string
+{
+    $template = social_validate_announcement_template($template);
+    if ($template === '') $template = social_default_announcement_template();
+    return trim(strtr($template, [
+        '{title}' => trim($title),
+        '{url}' => trim($url),
+    ]));
+}
+
 function social_connection(): array
 {
     if (!is_file(plus_database_path())) return [];
@@ -408,12 +457,21 @@ function social_retry_revocation(int $id): void
 
 function social_set_public_enabled(bool $enabled, ?int $now = null): void
 {
+    social_set_settings($enabled, social_configured_announcement_template(), $now);
+}
+
+function social_set_settings(bool $publicEnabled, string $announcementTemplate, ?int $now = null): void
+{
     $now ??= time();
+    $announcementTemplate = social_validate_announcement_template($announcementTemplate);
+    $connection = social_connection();
+    $publicVisibilityChanged = !empty($connection['public_enabled']) !== $publicEnabled;
     plus_database()->prepare(
-        'INSERT INTO plus_social_connection (id,public_enabled,updated_at) VALUES (1,?,?) '
-        . 'ON CONFLICT(id) DO UPDATE SET public_enabled=excluded.public_enabled,updated_at=excluded.updated_at'
-    )->execute([$enabled ? 1 : 0, $now]);
-    cache_clear();
+        'INSERT INTO plus_social_connection (id,public_enabled,announcement_template,updated_at) VALUES (1,?,?,?) '
+        . 'ON CONFLICT(id) DO UPDATE SET public_enabled=excluded.public_enabled,'
+        . 'announcement_template=excluded.announcement_template,updated_at=excluded.updated_at'
+    )->execute([$publicEnabled ? 1 : 0, $announcementTemplate, $now]);
+    if ($publicVisibilityChanged) cache_clear();
 }
 
 function social_syndication_targets(): array
@@ -686,7 +744,11 @@ function social_publish_announcement(string $slug, string $title, ?array $record
     $archiveId = social_active_archive_id($connection);
     if ($archiveId <= 0) return;
     $record ??= social_announcement_record($slug);
-    $text = $title . "\n\n" . webmention_sender_content_url('post', $slug);
+    $text = social_render_announcement(
+        social_announcement_template($connection),
+        $title,
+        webmention_sender_content_url('post', $slug)
+    );
     $hash = hash('sha256', $text);
     if ($record !== null && hash_equals((string) $record['content_hash'], $hash)) return;
     $options = ['form' => ['status' => $text, 'visibility' => 'public'], 'idempotency_key' => hash('sha256', 'pureblog:' . $slug . ':' . $hash)];

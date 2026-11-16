@@ -51,6 +51,11 @@ title or URL changes update the existing remote status, and disabling the option
 the article removes it. Creation uses an idempotency key and the remote status ID is kept only
 as operational connector state.
 
+The owner can configure one global announcement template under **Settings → Social**. The
+template accepts `{title}` and the required `{url}` placeholder; leaving it empty restores the
+default `{title}`, a blank line, and `{url}`. The server applies this template equally to posts
+published from the admin editor and to announcements requested by a Micropub client.
+
 The connected account is also advertised as a Micropub syndication target. A client that sends
 that target through `mp-syndicate-to` enables the same announcement behavior; it does not make
 the social account the source of the blog post.

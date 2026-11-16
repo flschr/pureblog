@@ -23,6 +23,14 @@ $revokeFails = false;
 
 try {
     require dirname(__DIR__) . '/functions.php';
+    $legacyDatabase = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $legacyDatabase->exec('CREATE TABLE plus_social_connection (id INTEGER PRIMARY KEY,public_enabled INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL)');
+    $legacyDatabase->exec('INSERT INTO plus_social_connection (id,public_enabled,updated_at) VALUES (1,1,1000)');
+    ($GLOBALS['_pureblog_plus_migrations']['0011_social_announcement_template'])($legacyDatabase);
+    social_test_assert(
+        $legacyDatabase->query('SELECT announcement_template FROM plus_social_connection WHERE id=1')->fetchColumn() === '',
+        'Existing social settings did not inherit the default announcement template during migration.'
+    );
     $GLOBALS['_pureblog_social_public_ips'] = static fn(string $host): array => ['203.0.113.10'];
     $GLOBALS['_pureblog_social_media_archiver'] = static function (string $url): string {
         if (str_contains($url, 'broken')) throw new RuntimeException('Synthetic archive failure.');
@@ -123,11 +131,33 @@ try {
     social_publish_announcement('new-post', 'New post', null, null, 1300);
     $announcement = social_announcement_record('new-post');
     social_test_assert($announcement !== null && $announcement['remote_id'] === 'announcement-new', 'Blog announcement was not mapped.');
+    social_test_assert(
+        ($requests[array_key_last($requests)][2]['form']['status'] ?? '') === "New post\n\nhttp://localhost/new-post",
+        'Default blog announcement template changed.'
+    );
     social_test_assert(count($requests) === $announcementRequestCount + 1 && ($requests[array_key_last($requests)][2]['idempotency_key'] ?? '') !== '', 'Announcement creation was not idempotent at the API boundary.');
     social_publish_announcement('new-post', 'New post', $announcement, null, 1301);
     social_test_assert(count($requests) === $announcementRequestCount + 1, 'Unchanged announcement was sent twice.');
-    social_publish_announcement('new-post', 'Renamed post', $announcement, null, 1302);
-    social_test_assert(count($requests) === $announcementRequestCount + 2 && $requests[array_key_last($requests)][0] === 'PUT', 'Changed announcement was not updated in place.');
+    social_set_settings(true, "New on the blog: {title}\n{url}\nComments welcome.", 1302);
+    social_test_assert(social_announcement_template() === "New on the blog: {title}\n{url}\nComments welcome.", 'Announcement template setting was not persisted.');
+    social_publish_announcement('new-post', 'Renamed post', $announcement, null, 1303);
+    social_test_assert(
+        count($requests) === $announcementRequestCount + 2
+        && $requests[array_key_last($requests)][0] === 'PUT'
+        && ($requests[array_key_last($requests)][2]['form']['status'] ?? '') === "New on the blog: Renamed post\nhttp://localhost/new-post\nComments welcome.",
+        'Changed announcement template was not rendered and updated in place.'
+    );
+    social_set_settings(true, '', 1304);
+    social_test_assert(social_configured_announcement_template() === '', 'Empty announcement template was duplicated into persisted settings.');
+    social_test_assert(social_announcement_template() === social_default_announcement_template(), 'Empty announcement template did not inherit the default.');
+    foreach ([['Only {title}', 'must contain'], ['{title} {unknown} {url}', 'unknown placeholder']] as [$invalidTemplate, $expectedError]) {
+        try {
+            social_validate_announcement_template($invalidTemplate);
+            throw new RuntimeException('Invalid announcement template was accepted.');
+        } catch (InvalidArgumentException $error) {
+            social_test_assert(str_contains($error->getMessage(), $expectedError), 'Unexpected announcement template validation error.');
+        }
+    }
 
     plus_database()->prepare('INSERT INTO plus_social_announcements (archive_id,post_slug,remote_id,remote_url,content_hash,updated_at) VALUES (?,?,?,?,?,?)')
         ->execute([social_active_archive_id(), 'post', 'announcement-1', 'https://example.social/@rene/announcement-1', 'hash', 1300]);
