@@ -1,12 +1,12 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.11",
+    "version": "3.9.2-plus.12",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
         "includes/plus/runtime.php": "e6a77fccdbde70eb584859c489fc7c20efc0686ea84181dfbba1b8726ec1fc4e",
-        "includes/plus/migrations.php": "78768da1302bf4e1f8d321639cbbf2db93f83eae5fc314341cd2fe6bd62c3532",
+        "includes/plus/migrations.php": "de11977fe6c946cfedf1a46056b9cb62cb5d3621fca445df67e6d5b27887c612",
         "includes/plus/jobs.php": "a30092938aff0d1f3d5a5810bc0d1b11bf4c6bd3b1da5968c67543f98ce36b2b",
         "includes/plus/job-runner.php": "e78cd500e2f67e70e392fb29eea8cac97dba775b627ecf0c0aa1658a87509865",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",

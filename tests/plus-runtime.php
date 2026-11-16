@@ -47,6 +47,28 @@ function test_finish_process(array $entry): mixed
     return json_decode(trim($output), true, 512, JSON_THROW_ON_ERROR);
 }
 
+function test_start_command(array $command): array
+{
+    $pipes = [];
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    if (!is_resource($process)) {
+        throw new RuntimeException('Unable to start test process.');
+    }
+    return [$process, $pipes];
+}
+
+function test_finish_command(array $entry): string
+{
+    [$process, $pipes] = $entry;
+    $output = trim(stream_get_contents($pipes[1]));
+    $error = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $status = proc_close($process);
+    test_assert($status === 0, 'Test process failed: ' . $error);
+    return $output;
+}
+
 $root = sys_get_temp_dir() . '/pureblog-plus-' . bin2hex(random_bytes(8));
 $dataPath = $root . '/plus';
 define('PUREBLOG_PLUS_DATA_PATH', $dataPath);
@@ -94,6 +116,20 @@ try {
     test_assert($failureState['lockout_until'] > time(), 'Login failure threshold did not lock out.');
     clear_login_failures('192.0.2.44');
     test_assert(get_login_failure_state('192.0.2.44')['failures'] === 0, 'Login failure state was not cleared.');
+    $failureWorkers = [];
+    for ($worker = 0; $worker < 24; $worker++) {
+        $failureWorkers[] = test_start_command([
+            PHP_BINARY,
+            __DIR__ . '/plus-login-failure-worker.php',
+            $dataPath,
+            '192.0.2.45',
+        ]);
+    }
+    $failureCounts = array_map(static fn(array $entry): int => (int) test_finish_command($entry), $failureWorkers);
+    sort($failureCounts);
+    test_assert($failureCounts === range(1, 24), 'Parallel login failures were not serialized without migration lock errors.');
+    test_assert(get_login_failure_state('192.0.2.45')['failures'] === 24, 'Parallel login failure total was not retained.');
+    clear_login_failures('192.0.2.45');
     set_remember_me_cookie();
     test_assert((int) $database->query('SELECT COUNT(*) FROM plus_remember_tokens')->fetchColumn() === 1, 'Remember token was not stored transactionally.');
     clear_all_remember_me_tokens();
