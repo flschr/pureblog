@@ -24,7 +24,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !isset($_POST['admin_act
             social_schedule_sync(time(), true);
             $notice = t('admin.settings.social.sync_queued');
         } else {
-            social_set_public_enabled(isset($_POST['public_enabled']));
+            social_set_settings(
+                isset($_POST['public_enabled']),
+                (string) ($_POST['announcement_template'] ?? social_announcement_template())
+            );
             $notice = t('admin.settings.social.saved');
         }
     } catch (Throwable $exception) {
@@ -53,6 +56,9 @@ require __DIR__ . '/../includes/admin-head.php';
                 <?= csrf_field() ?>
                 <input type="hidden" name="social_action" value="save">
                 <label><input type="checkbox" name="public_enabled" value="1"<?= !empty($connection['public_enabled']) ? ' checked' : '' ?>> <?= e(t('admin.settings.social.public_enabled')) ?></label>
+                <label for="announcement-template"><b><?= e(t('admin.settings.social.announcement_template')) ?></b></label>
+                <textarea id="announcement-template" name="announcement_template" rows="5" maxlength="2000"><?= e(social_announcement_template($connection)) ?></textarea>
+                <p class="tip"><?= e(t('admin.settings.social.announcement_template_tip')) ?></p>
                 <button type="submit"><?= e(t('admin.settings.nav.save')) ?></button>
             </form>
         <?php endif; ?>
@@ -75,6 +81,9 @@ require __DIR__ . '/../includes/admin-head.php';
             <input type="hidden" name="social_action" value="save">
             <label><input type="checkbox" name="public_enabled" value="1"<?= !empty($connection['public_enabled']) ? ' checked' : '' ?>> <?= e(t('admin.settings.social.public_enabled')) ?></label>
             <p class="tip"><?= e(t('admin.settings.social.public_tip')) ?></p>
+            <label for="announcement-template"><b><?= e(t('admin.settings.social.announcement_template')) ?></b></label>
+            <textarea id="announcement-template" name="announcement_template" rows="5" maxlength="2000"><?= e(social_announcement_template($connection)) ?></textarea>
+            <p class="tip"><?= e(t('admin.settings.social.announcement_template_tip')) ?></p>
             <button type="submit" class="save"><?= e(t('admin.settings.nav.save')) ?></button>
         </form>
         <form method="post" class="inline-form">

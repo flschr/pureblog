@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Micropub string content now enters the normal Markdown pipeline, so generated media descriptions fill empty image alt text while authored alt text remains unchanged."
+    "instructions": "Social settings can now define one blog-announcement template with {title} and the required {url} placeholder. The same template applies to admin and Micropub announcements."
 }

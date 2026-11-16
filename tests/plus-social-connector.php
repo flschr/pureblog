@@ -123,11 +123,31 @@ try {
     social_publish_announcement('new-post', 'New post', null, null, 1300);
     $announcement = social_announcement_record('new-post');
     social_test_assert($announcement !== null && $announcement['remote_id'] === 'announcement-new', 'Blog announcement was not mapped.');
+    social_test_assert(
+        ($requests[array_key_last($requests)][2]['form']['status'] ?? '') === "New post\n\nhttp://localhost/new-post",
+        'Default blog announcement template changed.'
+    );
     social_test_assert(count($requests) === $announcementRequestCount + 1 && ($requests[array_key_last($requests)][2]['idempotency_key'] ?? '') !== '', 'Announcement creation was not idempotent at the API boundary.');
     social_publish_announcement('new-post', 'New post', $announcement, null, 1301);
     social_test_assert(count($requests) === $announcementRequestCount + 1, 'Unchanged announcement was sent twice.');
-    social_publish_announcement('new-post', 'Renamed post', $announcement, null, 1302);
-    social_test_assert(count($requests) === $announcementRequestCount + 2 && $requests[array_key_last($requests)][0] === 'PUT', 'Changed announcement was not updated in place.');
+    social_set_settings(true, "New on the blog: {title}\n{url}\nComments welcome.", 1302);
+    social_test_assert(social_announcement_template() === "New on the blog: {title}\n{url}\nComments welcome.", 'Announcement template setting was not persisted.');
+    social_publish_announcement('new-post', 'Renamed post', $announcement, null, 1303);
+    social_test_assert(
+        count($requests) === $announcementRequestCount + 2
+        && $requests[array_key_last($requests)][0] === 'PUT'
+        && ($requests[array_key_last($requests)][2]['form']['status'] ?? '') === "New on the blog: Renamed post\nhttp://localhost/new-post\nComments welcome.",
+        'Changed announcement template was not rendered and updated in place.'
+    );
+    social_test_assert(social_validate_announcement_template('') === social_default_announcement_template(), 'Empty announcement template did not restore the default.');
+    foreach ([['Only {title}', 'must contain'], ['{title} {unknown} {url}', 'unknown placeholder']] as [$invalidTemplate, $expectedError]) {
+        try {
+            social_validate_announcement_template($invalidTemplate);
+            throw new RuntimeException('Invalid announcement template was accepted.');
+        } catch (InvalidArgumentException $error) {
+            social_test_assert(str_contains($error->getMessage(), $expectedError), 'Unexpected announcement template validation error.');
+        }
+    }
 
     plus_database()->prepare('INSERT INTO plus_social_announcements (archive_id,post_slug,remote_id,remote_url,content_hash,updated_at) VALUES (?,?,?,?,?,?)')
         ->execute([social_active_archive_id(), 'post', 'announcement-1', 'https://example.social/@rene/announcement-1', 'hash', 1300]);
