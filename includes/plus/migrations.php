@@ -74,30 +74,40 @@ function plus_database(): PDO
 
 function plus_apply_migrations(PDO $database): void
 {
-    $database->exec(
-        'CREATE TABLE IF NOT EXISTS plus_migrations ('
-        . 'id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)'
-    );
+    $registered = array_keys($GLOBALS['_pureblog_plus_migrations']);
+    $tableExists = (int) $database->query(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='plus_migrations'"
+    )->fetchColumn() === 1;
+    if (!$tableExists) {
+        $database->exec(
+            'CREATE TABLE IF NOT EXISTS plus_migrations ('
+            . 'id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)'
+        );
+    }
+    $applied = $database->query('SELECT id FROM plus_migrations')->fetchAll(PDO::FETCH_COLUMN);
+    if (array_diff($registered, $applied) === []) {
+        return;
+    }
 
-    foreach ($GLOBALS['_pureblog_plus_migrations'] as $id => $migration) {
-        plus_begin_immediate($database);
-        try {
-            $query = $database->prepare('SELECT 1 FROM plus_migrations WHERE id = ?');
+    plus_begin_immediate($database);
+    try {
+        $query = $database->prepare('SELECT 1 FROM plus_migrations WHERE id = ?');
+        $record = $database->prepare(
+            'INSERT INTO plus_migrations (id, applied_at) VALUES (?, ?)'
+        );
+        foreach ($GLOBALS['_pureblog_plus_migrations'] as $id => $migration) {
             $query->execute([$id]);
             if ($query->fetchColumn() === false) {
                 $migration($database);
-                $record = $database->prepare(
-                    'INSERT INTO plus_migrations (id, applied_at) VALUES (?, ?)'
-                );
                 $record->execute([$id, time()]);
             }
-            $database->exec('COMMIT');
-        } catch (Throwable $error) {
-            if ($database->inTransaction()) {
-                $database->exec('ROLLBACK');
-            }
-            throw $error;
         }
+        $database->exec('COMMIT');
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
+        }
+        throw $error;
     }
 }
 
