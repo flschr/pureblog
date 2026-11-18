@@ -1852,6 +1852,101 @@ td {
 }
 
 /* Syntax Highlighted Textarea Overlay Editor */
+.markdown-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    position: relative;
+    z-index: 3;
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--input-bg);
+}
+
+.markdown-toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    margin: 0;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--text-color);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.markdown-toolbar-button:hover,
+.markdown-toolbar-button:focus-visible,
+.markdown-toolbar-more[open] > summary {
+    background: var(--accent-color);
+    color: var(--accent-text-color);
+}
+
+.markdown-toolbar-bold { font-weight: 700; }
+.markdown-toolbar-italic { font-style: italic; }
+.markdown-toolbar-strikethrough { text-decoration: line-through; }
+
+.markdown-toolbar-more {
+    position: relative;
+}
+
+.markdown-toolbar-more > summary {
+    list-style: none;
+    white-space: nowrap;
+}
+
+.markdown-toolbar-more > summary::-webkit-details-marker {
+    display: none;
+}
+
+.markdown-toolbar-menu {
+    display: grid;
+    gap: 0.125rem;
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    min-width: 11rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--input-bg);
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+}
+
+.markdown-toolbar-menu .markdown-toolbar-button {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.markdown-toolbar-menu .markdown-toolbar-mark {
+    text-decoration: underline;
+    text-decoration-color: var(--orange);
+    text-decoration-thickness: 0.25rem;
+}
+
+@media (max-width: 520px) {
+    .markdown-toolbar {
+        width: 100%;
+        justify-content: space-between;
+        box-sizing: border-box;
+    }
+
+    .markdown-toolbar-button {
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        padding-inline: 0.45rem;
+    }
+}
+
 .editor-wrap {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

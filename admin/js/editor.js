@@ -1,6 +1,7 @@
 (() => {
   const config = window.PureblogEditorConfig || {};
   const contentField = document.getElementById('content');
+  const markdownEdit = window.PureblogMarkdown?.markdownEdit;
   if (!contentField || typeof window.createSyntaxEditor !== 'function') {
     return;
   }
@@ -42,6 +43,109 @@
 
   // Initialize syntax editor on the main content textarea
   const mainEditor = window.createSyntaxEditor(contentField, 'markdown');
+
+  function applyMarkdownAction(action) {
+    if (typeof markdownEdit !== 'function') return;
+    const start = contentField.selectionStart;
+    const end = contentField.selectionEnd;
+    const edit = markdownEdit(contentField.value, start, end, action);
+    if (!edit) return;
+
+    contentField.focus();
+    contentField.setRangeText(edit.replacement, start, end, 'preserve');
+    const selectionStart = start + edit.selectionStart;
+    const selectionEnd = start + edit.selectionEnd;
+
+    if (edit.append) {
+      const appendStart = contentField.value.length;
+      contentField.setRangeText(edit.append, appendStart, appendStart, 'end');
+      if (end === start) {
+        const definitionCursor = appendStart + edit.appendSelectionOffset;
+        contentField.setSelectionRange(definitionCursor, definitionCursor);
+      } else {
+        contentField.setSelectionRange(selectionStart, selectionEnd);
+      }
+    } else {
+      contentField.setSelectionRange(selectionStart, selectionEnd);
+    }
+
+    contentField.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function createMarkdownToolbar() {
+    const strings = config.strings || {};
+    const toolbar = document.createElement('div');
+    toolbar.className = 'markdown-toolbar';
+    toolbar.setAttribute('role', 'group');
+    toolbar.setAttribute('aria-label', strings.toolbar_label || 'Markdown formatting');
+    toolbar.setAttribute('aria-controls', contentField.id);
+
+    const addButton = (parent, action, label, text, icon = '') => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `markdown-toolbar-button markdown-toolbar-${action}`;
+      button.dataset.markdownAction = action;
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      if (icon !== '') {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.classList.add('icon');
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `#${icon}`);
+        svg.appendChild(use);
+        button.appendChild(svg);
+      } else {
+        button.textContent = text;
+      }
+      parent.appendChild(button);
+    };
+
+    addButton(toolbar, 'bold', strings.toolbar_bold || 'Bold', 'B');
+    addButton(toolbar, 'italic', strings.toolbar_italic || 'Italic', 'I');
+    addButton(toolbar, 'strikethrough', strings.toolbar_strikethrough || 'Strikethrough', 'S');
+    addButton(toolbar, 'link', strings.toolbar_link || 'Link', '', 'icon-link');
+    addButton(toolbar, 'footnote', strings.toolbar_footnote || 'Footnote', '[¹]');
+
+    const more = document.createElement('details');
+    more.className = 'markdown-toolbar-more';
+    const summary = document.createElement('summary');
+    summary.className = 'markdown-toolbar-button';
+    summary.textContent = strings.toolbar_more || 'More';
+    more.appendChild(summary);
+    const menu = document.createElement('div');
+    menu.className = 'markdown-toolbar-menu';
+    menu.setAttribute('role', 'group');
+    menu.setAttribute('aria-label', strings.toolbar_more || 'More');
+    addButton(menu, 'mark', strings.toolbar_mark || 'Highlight', strings.toolbar_mark || 'Highlight');
+    addButton(menu, 'code-block', strings.toolbar_code_block || 'Code block', strings.toolbar_code_block || 'Code block');
+    addButton(menu, 'inline-code', strings.toolbar_inline_code || 'Inline code', strings.toolbar_inline_code || 'Inline code');
+    addButton(menu, 'note', strings.toolbar_note || 'Note', strings.toolbar_note || 'Note');
+    addButton(menu, 'warning', strings.toolbar_warning || 'Warning', strings.toolbar_warning || 'Warning');
+    addButton(menu, 'caution', strings.toolbar_caution || 'Caution', strings.toolbar_caution || 'Caution');
+    more.appendChild(menu);
+    toolbar.appendChild(more);
+
+    toolbar.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-markdown-action]');
+      if (!button) return;
+      applyMarkdownAction(button.dataset.markdownAction);
+      more.removeAttribute('open');
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+      if (!more.contains(event.target)) more.removeAttribute('open');
+    });
+    more.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      more.removeAttribute('open');
+      summary.focus();
+    });
+
+    mainEditor.wrapper.parentNode.insertBefore(toolbar, mainEditor.wrapper);
+  }
+
+  if (typeof markdownEdit === 'function') createMarkdownToolbar();
 
   const missingMediaAlt = Array.isArray(config.missingMediaAlt) ? config.missingMediaAlt : [];
   if (missingMediaAlt.length > 0) {
