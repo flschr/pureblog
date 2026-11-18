@@ -551,6 +551,29 @@ blockquote p {
     opacity: 0.8;
 }
 
+.admonition {
+    margin: 2rem 0;
+    padding: 0.8rem 1rem;
+    border-left: 3px solid var(--accent-color);
+    background: var(--accent-bg-color);
+}
+
+.admonition > :first-child {
+    margin-top: 0;
+}
+
+.admonition > :last-child {
+    margin-bottom: 0;
+}
+
+.admonition-warning {
+    border-left-color: #a50;
+}
+
+.admonition-caution {
+    border-left-color: var(--red, #af2e1b);
+}
+
 cite {
     font-size: 0.9rem;
 }

@@ -1,8 +1,7 @@
-import { markdownEdit } from './markdown-formatting.mjs';
-
 (() => {
   const config = window.PureblogEditorConfig || {};
   const contentField = document.getElementById('content');
+  const markdownEdit = window.PureblogMarkdown?.markdownEdit;
   if (!contentField || typeof window.createSyntaxEditor !== 'function') {
     return;
   }
@@ -46,6 +45,7 @@ import { markdownEdit } from './markdown-formatting.mjs';
   const mainEditor = window.createSyntaxEditor(contentField, 'markdown');
 
   function applyMarkdownAction(action) {
+    if (typeof markdownEdit !== 'function') return;
     const start = contentField.selectionStart;
     const end = contentField.selectionEnd;
     const edit = markdownEdit(contentField.value, start, end, action);
@@ -76,7 +76,7 @@ import { markdownEdit } from './markdown-formatting.mjs';
     const strings = config.strings || {};
     const toolbar = document.createElement('div');
     toolbar.className = 'markdown-toolbar';
-    toolbar.setAttribute('role', 'toolbar');
+    toolbar.setAttribute('role', 'group');
     toolbar.setAttribute('aria-label', strings.toolbar_label || 'Markdown formatting');
     toolbar.setAttribute('aria-controls', contentField.id);
 
@@ -98,7 +98,6 @@ import { markdownEdit } from './markdown-formatting.mjs';
       } else {
         button.textContent = text;
       }
-      button.addEventListener('mousedown', (event) => event.preventDefault());
       parent.appendChild(button);
     };
 
@@ -146,7 +145,7 @@ import { markdownEdit } from './markdown-formatting.mjs';
     mainEditor.wrapper.parentNode.insertBefore(toolbar, mainEditor.wrapper);
   }
 
-  createMarkdownToolbar();
+  if (typeof markdownEdit === 'function') createMarkdownToolbar();
 
   const missingMediaAlt = Array.isArray(config.missingMediaAlt) ? config.missingMediaAlt : [];
   if (missingMediaAlt.length > 0) {

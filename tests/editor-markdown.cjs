@@ -1,7 +1,7 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+const assert = require('node:assert/strict');
+const test = require('node:test');
 
-import { markdownEdit } from '../admin/js/markdown-formatting.mjs';
+const { markdownEdit } = require('../admin/js/markdown-formatting.js');
 
 test('wraps the selected text with inline formatting', () => {
   assert.deepEqual(markdownEdit('hello world', 6, 11, 'bold'), {
@@ -24,6 +24,14 @@ test('places the cursor inside an empty wrapper', () => {
     replacement: '****',
     selectionStart: 2,
     selectionEnd: 2,
+  });
+});
+
+test('uses a safe inline-code delimiter around selected backticks', () => {
+  assert.deepEqual(markdownEdit('`value`', 0, 7, 'inline-code'), {
+    replacement: '`` `value` ``',
+    selectionStart: 3,
+    selectionEnd: 10,
   });
 });
 
@@ -53,12 +61,20 @@ test('creates the next numbered footnote and uses selected text as its definitio
   });
 });
 
-test('creates fenced code blocks', () => {
-  assert.deepEqual(markdownEdit('const value = 1;', 0, 16, 'code-block'), {
-    replacement: '```\nconst value = 1;\n```',
-    selectionStart: 4,
-    selectionEnd: 20,
+test('indents multiline footnote continuations', () => {
+  assert.equal(markdownEdit('first\nsecond', 0, 12, 'footnote').append, '\n\n[^1]: first\n    second');
+});
+
+test('creates fenced code blocks on block boundaries', () => {
+  assert.deepEqual(markdownEdit('before code after', 7, 11, 'code-block'), {
+    replacement: '\n```\ncode\n```\n',
+    selectionStart: 5,
+    selectionEnd: 9,
   });
+});
+
+test('uses a longer fence when the selected code contains backticks', () => {
+  assert.equal(markdownEdit('```', 0, 3, 'code-block').replacement, '````\n```\n````');
 });
 
 test('creates supported admonition blocks', () => {
@@ -67,6 +83,6 @@ test('creates supported admonition blocks', () => {
   assert.equal(markdownEdit('Stop', 0, 4, 'caution').replacement, '> [!CAUTION]\n> Stop');
 });
 
-test('prefixes every selected admonition line', () => {
-  assert.equal(markdownEdit('one\ntwo', 0, 7, 'note').replacement, '> [!NOTE]\n> one\n> two');
+test('puts admonitions selected within a paragraph on block boundaries', () => {
+  assert.equal(markdownEdit('before one\ntwo after', 7, 14, 'note').replacement, '\n> [!NOTE]\n> one\n> two\n');
 });

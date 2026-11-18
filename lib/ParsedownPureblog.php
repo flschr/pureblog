@@ -11,6 +11,77 @@
  */
 class ParsedownPureblog extends ParsedownExtra
 {
+    public function __construct()
+    {
+        parent::__construct();
+        $this->InlineTypes['='][] = 'Highlight';
+        $this->inlineMarkerList .= '=';
+        array_unshift($this->BlockTypes['>'], 'Admonition');
+    }
+
+    protected function inlineHighlight($Excerpt)
+    {
+        if (isset($Excerpt['text'][1])
+            && $Excerpt['text'][1] === '='
+            && preg_match('/^==(?=\S)(.+?)(?<=\S)==/', $Excerpt['text'], $matches)
+        ) {
+            return [
+                'extent' => strlen($matches[0]),
+                'element' => [
+                    'name' => 'mark',
+                    'handler' => [
+                        'function' => 'lineElements',
+                        'argument' => $matches[1],
+                        'destination' => 'elements',
+                    ],
+                ],
+            ];
+        }
+
+        return null;
+    }
+
+    protected function blockAdmonition($Line)
+    {
+        if (!preg_match('/^>[ ]?\[!(NOTE|WARNING|CAUTION)\](?:[+-])?(?:[ ]+(.+))?$/i', $Line['text'], $matches)) {
+            return null;
+        }
+
+        $type = strtolower($matches[1]);
+        $customTitle = trim((string) ($matches[2] ?? ''));
+        $translationKey = 'frontend.admonition_' . $type;
+        $translatedTitle = function_exists('t') ? t($translationKey) : '';
+        $title = $customTitle !== ''
+            ? $customTitle
+            : ($translatedTitle !== '' && $translatedTitle !== $translationKey ? $translatedTitle : ucfirst($type));
+
+        return [
+            'element' => [
+                'name' => 'aside',
+                'attributes' => [
+                    'class' => 'admonition admonition-' . $type,
+                    'role' => 'note',
+                    'aria-label' => $title,
+                ],
+                'handler' => [
+                    'function' => 'linesElements',
+                    'argument' => ['**' . $title . '**', ''],
+                    'destination' => 'elements',
+                ],
+            ],
+        ];
+    }
+
+    protected function blockAdmonitionContinue($Line, array $Block)
+    {
+        if (isset($Block['interrupted']) || !preg_match('/^>[ ]?(.*)$/', $Line['text'], $matches)) {
+            return null;
+        }
+
+        $Block['element']['handler']['argument'][] = $matches[1];
+        return $Block;
+    }
+
     protected function element(array $Element)
     {
         if (
