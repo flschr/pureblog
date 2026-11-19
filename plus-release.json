@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.15",
+    "version": "3.9.2-plus.16",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
@@ -11,14 +11,14 @@
         "includes/plus/job-runner.php": "e78cd500e2f67e70e392fb29eea8cac97dba775b627ecf0c0aa1658a87509865",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/plugins.php": "58ce3d883a79ea2156fc41e8ac4583791c66664532166a7ee0fd64ae5ab5b3dc",
-        "includes/plus/media.php": "62844a0a5b58d6dbfdf11ae8349161f9e2959d7e6aaa431f3f6a4fe9f703259a",
+        "includes/plus/media.php": "31e8424db5b3889b7d192376fa99c68c438606f9c3d4eb60384ee26b87b0f7ea",
         "includes/plugins/local-media.php": "b61ded39c32383a772f55e5f2c31f1f6b82f4f20c3053763aec97bfcb9cd7e47",
         "includes/plugins/s3-media.php": "934ed8d6b037c070911cc8be1d9ec7139ff4a6536e9654008db0d5ac2a5c80d9",
         "includes/plugins/openai-alt-text.php": "ce078353c166595a6b93c7acafaf96a64ba493c6980f925205681a9f6a8a2552",
         "includes/plus/indieauth.php": "75204e9cd504391f82bcfb8a96201955dd08721d3d770745b37189b24d0bd804",
         "includes/plus/indieauth-client.php": "81c70b3e9bdb37936ac6f83876038dc1b18cc326e5ee2f00264c0f4a63405581",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
-        "includes/plus/micropub.php": "0f2de6bc8646fe5fc99d7b6c60ccf1c005f42ea45d9c50417945f57151178781",
+        "includes/plus/micropub.php": "9ce15767a5164ff1a003f49cfb28c3ce81d7d6364d632fe4efcb188f23edb757",
         "includes/plus/webmentions.php": "34dc5dafa73ede0ae6ab3b1fb65a914b7b425f6741e4b5dcfaf84e49774cb214",
         "includes/plus/webmention-sender.php": "76a3b6de7341b4d27975670f02a7798d97bb543626839c5efa64af03b63b1db2",
         "includes/plus/social-connector.php": "4692d8ac650e0b4b839ae4e0a6b4589e4eec2d565be9162610ff866d445c900f",
@@ -34,7 +34,8 @@
         "admin/social-callback.php": "8682883101a1ac67b3c2dd48c78a261b2ae6c18f1e5550ed32b3fd8d8f02ae41",
         "social.php": "4dbffb139ebc404fb54f615d3ac2c54dbdcac3c2d352943b9f7ef1b76b6b779e",
         "admin/media-alt-text.php": "71343ff28c79cfe8ae9c40d5cdd5f2b688c3f33d95809019c80fc17f1d66f218",
-        "admin/update-media-alt.php": "cbf77a426143524e2c9a70afe1817ed6cf13bbc64f09ad27a4f70347628d76a5",
-        "admin/delete-media.php": "1bc67b7057bb5530ca49bbecd4da9b9f42cf57c4de1c18d7f18234b54d18e1fc"
+        "admin/update-media-alt.php": "d15a3246f05920b48bb19ff105f367f6173a7b1e7e4ed7a040f323160bb06281",
+        "admin/delete-media.php": "1bc67b7057bb5530ca49bbecd4da9b9f42cf57c4de1c18d7f18234b54d18e1fc",
+        "admin/partials/editor-media.php": "7cc43bcb91a1b529a83c65b831d378ef1aaf0ab47fb6a5f60e27427c31c699bf"
     }
 }
