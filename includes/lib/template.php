@@ -83,7 +83,8 @@ function render_post_media(array $post): string
             if ($type === 'photo') {
                 $html[] = '<figure><img loading="lazy" src="' . e($url) . '" alt="' . e($alt) . '"></figure>';
             } elseif ($type === 'video') {
-                $html[] = '<video controls preload="metadata" src="' . e($url) . '"></video>';
+                $html[] = '<video class="micropub-video" controls playsinline preload="metadata" src="' . e($url) . '"'
+                    . ($alt !== '' ? ' aria-label="' . e($alt) . '"' : '') . '></video>';
             } else {
                 $html[] = '<audio controls preload="metadata" src="' . e($url) . '"></audio>';
             }
