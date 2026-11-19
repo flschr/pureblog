@@ -39,6 +39,11 @@ there is no stored description yet, it tries to generate one at that point. The 
 text is ordinary post content, is returned by a later source query, and can be edited normally.
 The Media Endpoint itself still returns the standard `Location` response.
 
+Managed videos referenced through the structured `video` property are also discoverable in
+the admin editor. A client-supplied `video.alt` remains authoritative. When it is absent, an
+editable stored video description is used as the accessible label without creating a visible
+caption. The same MOV, MP4, and WebM formats can be selected directly in the admin editor.
+
 Syndication targets are empty until an optional social connector is configured. Unknown
 post properties are ignored as required by Micropub rather than being written into front
 matter.

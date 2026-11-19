@@ -44,4 +44,8 @@ $custom = $parser->text("> [!WARNING] Custom title\n> Body");
 render_assert(str_contains($custom, 'class="admonition admonition-warning"'), 'Warning did not render as an admonition.');
 render_assert(str_contains($custom, 'aria-label="Custom title"'), 'Custom admonition title was lost.');
 
+$video = $parser->text('<video controls playsinline preload="metadata" src="https://media.example/video.mov"></video>');
+render_assert(str_contains($video, '<video controls playsinline preload="metadata"'), 'Editor video markup did not survive Markdown rendering.');
+render_assert(str_contains($video, 'src="https://media.example/video.mov"'), 'Editor video source changed during Markdown rendering.');
+
 echo "editor Markdown rendering tests: PASS\n";

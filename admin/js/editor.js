@@ -618,7 +618,7 @@
         setTimeout(() => notice.remove(), 250);
       });
       const url = new URL(window.location.href);
-      ['saved', 'uploaded', 'upload_error'].forEach((param) => url.searchParams.delete(param));
+      ['saved', 'uploaded', 'upload_error', 'alt_saved', 'alt_error'].forEach((param) => url.searchParams.delete(param));
       window.history.replaceState({}, document.title, url.toString());
     }, 2500);
   }
@@ -673,7 +673,7 @@
   }
 
   function openGalleryPicker(triggerButton) {
-    const listItems = document.querySelectorAll('.image-list li');
+    const listItems = document.querySelectorAll('.image-list li[data-media-kind="image"]');
     if (!listItems.length) {
       return;
     }
@@ -938,7 +938,9 @@
     }
 
     for (const file of event.dataTransfer.files) {
-      if (!file.type.startsWith('image/') && !/\.(?:heic|heif)$/i.test(file.name)) {
+      if (!file.type.startsWith('image/')
+        && !file.type.startsWith('video/')
+        && !/\.(?:heic|heif|mov|mp4|webm)$/i.test(file.name)) {
         continue;
       }
 

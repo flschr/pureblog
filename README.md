@@ -70,6 +70,8 @@ All you need to run Pure Blog is a host that supports PHP (pretty much all of th
 Posts live in `content/posts` and pages live in `content/pages`. New admin and Micropub
 uploads share the selected media provider. The default stores public files under
 `content/media/YYYY/MM`; older `content/images/[post/page-slug]` URLs remain compatible.
+The post and page editors accept images plus MOV, MP4, and WebM videos. Managed videos
+referenced through Micropub appear in the same editor media list as direct admin uploads.
 
 ## Notes
 - Pure Blog is intentionally minimal and designed for personal sites.

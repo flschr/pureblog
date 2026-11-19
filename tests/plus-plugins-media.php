@@ -139,7 +139,31 @@ try {
     plugin_media_assert(is_file($preparedInput), 'Preparing an upload unexpectedly removed the source.');
     plugin_media_assert(plus_delete_media($preparedMedia['id']), 'Prepared media could not be deleted.');
     $editorScript = file_get_contents(dirname(__DIR__) . '/admin/js/editor.js');
-    plugin_media_assert(is_string($editorScript) && str_contains($editorScript, 'heic|heif'), 'Prepared image extensions are not accepted by editor drop handling.');
+    plugin_media_assert(is_string($editorScript) && str_contains($editorScript, 'heic|heif|mov|mp4|webm'), 'Prepared image and video extensions are not accepted by editor drop handling.');
+    $editorTemplate = file_get_contents(dirname(__DIR__) . '/admin/edit-post.php');
+    plugin_media_assert(is_string($editorTemplate) && str_contains($editorTemplate, 'video/quicktime') && str_contains($editorTemplate, '.mov'), 'Post editor picker does not accept QuickTime videos.');
+    plugin_media_assert(str_contains($editorScript, 'li[data-media-kind="image"]'), 'Video entries can leak into the image gallery picker.');
+    $uploadSource = file_get_contents(dirname(__DIR__) . '/admin/upload-image.php');
+    plugin_media_assert(is_string($uploadSource) && str_contains($uploadSource, "null, 'visual'"), 'Admin upload remains restricted to images.');
+
+    $videoUpload = $root . '/feeding.mov';
+    file_put_contents($videoUpload, pack('N', 20) . 'ftypqt  ' . str_repeat("\0", 8));
+    $video = plus_store_uploaded_media([
+        'name' => 'feeding.mov', 'tmp_name' => $videoUpload, 'error' => UPLOAD_ERR_OK,
+    ], false, null, 'visual');
+    plugin_media_assert($video['mime_type'] === 'video/quicktime', 'QuickTime upload did not retain its detected media type.');
+    plugin_media_assert(str_contains(plus_media_editor_markup(plus_media_by_id($video['id'])), '<video controls playsinline preload="metadata"'), 'Video upload did not produce editor video markup.');
+    plus_set_media_default_alt($video['id'], 'Fish feeding between aquarium rocks.');
+    $outpostPost = micropub_properties_to_post([
+        'content' => ['Dinner'], 'video' => [$video['url']],
+    ]);
+    $outpostVideo = json_decode((string) $outpostPost['micropub_video'], true);
+    plugin_media_assert(($outpostVideo[0]['alt'] ?? '') === 'Fish feeding between aquarium rocks.', 'Micropub video did not inherit its managed media description.');
+    plugin_media_assert(str_contains(render_post_media($outpostPost), 'aria-label="Fish feeding between aquarium rocks."'), 'Micropub video description was not rendered accessibly.');
+    $referencedVideo = plus_media_referenced_by('', '', plus_post_visual_media_urls($outpostPost));
+    plugin_media_assert(count($referencedVideo) === 1 && $referencedVideo[0]['id'] === $video['id'], 'Micropub video was not discoverable in the post editor.');
+    $inlineVideo = plus_enhance_media_html('<video controls src="' . $video['url'] . '"></video>');
+    plugin_media_assert(str_contains($inlineVideo, 'aria-label="Fish feeding between aquarium rocks."'), 'Inline managed video did not receive its stored description.');
 
     $unsupported = $root . '/upload.txt';
     file_put_contents($unsupported, 'not media');
@@ -180,6 +204,7 @@ try {
     plugin_media_assert(plus_delete_media($media['id']), 'Managed media could not be deleted.');
     plugin_media_assert(plus_media_by_url($media['url']) === null, 'Deleted media record remains.');
     foreach ($publicVariantPaths as $path) plugin_media_assert(!is_file($path), 'Deleted media variant remains.');
+    plugin_media_assert(plus_delete_media($video['id']), 'Managed video could not be deleted.');
 
     echo "PASS: bundled plugin trust, local provider, shared media storage, automatic missing alt text, prepared formats, responsive variants, authored alt text and deletion\n";
 } finally {

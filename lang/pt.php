@@ -189,6 +189,14 @@ return [
             'no_images'             => 'Ainda não há imagens.',
             'attached_images'       => 'Imagens anexadas:',
             'upload_label'          => 'Carregar imagem',
+            'media_title'           => 'Media', // ENGLISH PLACEHOLDER
+            'no_media'              => 'No media yet.', // ENGLISH PLACEHOLDER
+            'attached_media'        => 'Attached media:', // ENGLISH PLACEHOLDER
+            'upload_media_label'    => 'Upload images or videos', // ENGLISH PLACEHOLDER
+            'notice_media_uploaded' => 'Media uploaded and inserted.', // ENGLISH PLACEHOLDER
+            'media_description_saved' => 'Video description saved.', // ENGLISH PLACEHOLDER
+            'video_description'     => 'Video description', // ENGLISH PLACEHOLDER
+            'video_description_placeholder' => 'Describe the video for screen readers', // ENGLISH PLACEHOLDER
             'upload'                => 'Carregar',
             'copy'                  => 'Copiar',
             'delete'                => 'Eliminar',
