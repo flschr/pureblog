@@ -21,6 +21,31 @@ plus_register_migration('0004_webmention_sender', static function (PDO $database
     $database->exec('CREATE INDEX plus_webmention_deliveries_status_idx ON plus_webmention_deliveries (status,updated_at)');
 });
 
+plus_register_migration('0012_webmention_delivery_lifecycle', static function (PDO $database): void {
+    $database->exec(
+        'ALTER TABLE plus_webmention_deliveries ADD COLUMN referenced INTEGER NOT NULL DEFAULT 1 '
+        . 'CHECK (referenced IN (0,1))'
+    );
+    $database->exec(
+        'CREATE INDEX plus_webmention_deliveries_lifecycle_idx '
+        . 'ON plus_webmention_deliveries (status,referenced,delivered_at)'
+    );
+    $database->exec(
+        "CREATE VIEW plus_webmention_actionable_failures AS "
+        . "SELECT id FROM plus_webmention_deliveries "
+        . "WHERE status='failed' AND (referenced=1 OR delivered_at IS NOT NULL)"
+    );
+    if ((int) $database->query('SELECT COUNT(*) FROM plus_webmention_deliveries')->fetchColumn() > 0) {
+        $now = time();
+        $queue = $database->prepare(
+            "INSERT OR IGNORE INTO plus_jobs "
+            . "(type,payload,state,available_at,attempts,max_attempts,unique_key,created_at,updated_at) "
+            . "VALUES ('webmention.reconcile','{}','queued',?,0,5,'webmention-reconcile-0012',?,?)"
+        );
+        $queue->execute([$now, $now, $now]);
+    }
+});
+
 function webmention_sender_content_url(string $type, string $slug): string
 {
     if (!in_array($type, ['post', 'page'], true) || trim($slug) === '') {
@@ -96,9 +121,69 @@ function webmention_sender_previous_targets(string $sourceUrl): array
     if (!is_file(plus_database_path())) {
         return [];
     }
-    $query = plus_database()->prepare('SELECT target_url FROM plus_webmention_deliveries WHERE source_url=? ORDER BY id');
+    $query = plus_database()->prepare(
+        'SELECT target_url FROM plus_webmention_deliveries WHERE source_url=? AND delivered_at IS NOT NULL ORDER BY id'
+    );
     $query->execute([$sourceUrl]);
     return array_values(array_map('strval', $query->fetchAll(PDO::FETCH_COLUMN) ?: []));
+}
+
+function webmention_sender_reconcile_references(string $sourceUrl, array $currentTargets): void
+{
+    $sourceUrl = webmention_validate_url($sourceUrl);
+    $currentTargets = array_values(array_unique(array_map(
+        static fn(string $target): string => webmention_validate_url($target),
+        array_values(array_filter($currentTargets, 'is_string'))
+    )));
+    $database = plus_database();
+    $clear = $database->prepare('UPDATE plus_webmention_deliveries SET referenced=0 WHERE source_url=?');
+    $clear->execute([$sourceUrl]);
+    $mark = $database->prepare('UPDATE plus_webmention_deliveries SET referenced=1 WHERE source_url=? AND target_url=?');
+    foreach ($currentTargets as $targetUrl) {
+        $mark->execute([$sourceUrl, $targetUrl]);
+    }
+}
+
+function webmention_sender_failure_count(): int
+{
+    return (int) plus_database()->query('SELECT COUNT(*) FROM plus_webmention_actionable_failures')->fetchColumn();
+}
+
+function webmention_sender_reconcile_all_references(?array $documents = null): int
+{
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        $documents ??= array_merge(
+            array_map(static fn(array $content): array => ['type' => 'post', 'content' => $content], get_all_posts(false, true)),
+            array_map(static fn(array $content): array => ['type' => 'page', 'content' => $content], get_all_pages(false, true))
+        );
+        $references = [];
+        foreach ($documents as $document) {
+            $type = (string) ($document['type'] ?? '');
+            $content = is_array($document['content'] ?? null) ? $document['content'] : [];
+            $sourceUrl = webmention_sender_content_url($type, (string) ($content['slug'] ?? ''));
+            foreach (webmention_sender_extract_targets($type, $content, $sourceUrl) as $targetUrl) {
+                $references[$sourceUrl][$targetUrl] = true;
+            }
+        }
+        $database->exec('UPDATE plus_webmention_deliveries SET referenced=0');
+        $mark = $database->prepare('UPDATE plus_webmention_deliveries SET referenced=1 WHERE source_url=? AND target_url=?');
+        $marked = 0;
+        foreach ($references as $sourceUrl => $targets) {
+            foreach (array_keys($targets) as $targetUrl) {
+                $mark->execute([$sourceUrl, $targetUrl]);
+                $marked += $mark->rowCount();
+            }
+        }
+        $database->exec('COMMIT');
+        return $marked;
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
+        }
+        throw $error;
+    }
 }
 
 function webmention_sender_schedule_content(string $type, array $content, ?int $now = null): array
@@ -106,14 +191,44 @@ function webmention_sender_schedule_content(string $type, array $content, ?int $
     $slug = (string) ($content['slug'] ?? '');
     $sourceUrl = webmention_sender_content_url($type, $slug);
     $currentTargets = webmention_sender_extract_targets($type, $content, $sourceUrl);
-    $targets = array_values(array_unique(array_merge($currentTargets, webmention_sender_previous_targets($sourceUrl))));
-    return webmention_sender_schedule_targets($sourceUrl, $targets, $now);
+    if ($currentTargets === [] && !is_file(plus_database_path())) {
+        return [];
+    }
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        webmention_sender_reconcile_references($sourceUrl, $currentTargets);
+        $targets = array_values(array_unique(array_merge($currentTargets, webmention_sender_previous_targets($sourceUrl))));
+        $jobs = webmention_sender_schedule_targets($sourceUrl, $targets, $now);
+        $database->exec('COMMIT');
+        return $jobs;
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
+        }
+        throw $error;
+    }
 }
 
 function webmention_sender_schedule_deleted(string $type, string $slug, ?int $now = null): array
 {
     $sourceUrl = webmention_sender_content_url($type, $slug);
-    return webmention_sender_schedule_targets($sourceUrl, webmention_sender_previous_targets($sourceUrl), $now);
+    if (!is_file(plus_database_path())) {
+        return [];
+    }
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        webmention_sender_reconcile_references($sourceUrl, []);
+        $jobs = webmention_sender_schedule_targets($sourceUrl, webmention_sender_previous_targets($sourceUrl), $now);
+        $database->exec('COMMIT');
+        return $jobs;
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
+        }
+        throw $error;
+    }
 }
 
 function webmention_sender_schedule_targets(string $sourceUrl, array $targets, ?int $now = null): array
@@ -185,15 +300,26 @@ function webmention_sender_list(?string $status = null, int $limit = 100, int $o
 
 function webmention_sender_retry(int $id, ?int $now = null): bool
 {
-    $delivery = webmention_sender_get($id);
-    if ($delivery === null) {
-        return false;
+    $database = plus_database();
+    plus_begin_immediate($database);
+    try {
+        $delivery = webmention_sender_get($id);
+        if ($delivery === null) {
+            $database->exec('ROLLBACK');
+            return false;
+        }
+        $now ??= time();
+        $database->prepare('UPDATE plus_webmention_deliveries SET status=\'queued\',generation=generation+1,last_error=\'\',updated_at=? WHERE id=?')->execute([$now, $id]);
+        $generation = (int) webmention_sender_get($id)['generation'];
+        plus_enqueue_job('webmention.send', ['delivery_id' => $id, 'generation' => $generation], $now, 4, 'webmention-retry-' . $id . '-' . $generation);
+        $database->exec('COMMIT');
+        return true;
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) {
+            $database->exec('ROLLBACK');
+        }
+        throw $error;
     }
-    $now ??= time();
-    plus_database()->prepare('UPDATE plus_webmention_deliveries SET status=\'queued\',generation=generation+1,last_error=\'\',updated_at=? WHERE id=?')->execute([$now, $id]);
-    $generation = (int) webmention_sender_get($id)['generation'];
-    plus_enqueue_job('webmention.send', ['delivery_id' => $id, 'generation' => $generation], $now, 4, 'webmention-retry-' . $id . '-' . $generation);
-    return true;
 }
 
 function webmention_sender_safe_request(string $url, string $method = 'GET', array $form = [], int $maximumBytes = 1048576): array
@@ -382,12 +508,14 @@ function webmention_sender_discover_endpoint(string $targetUrl, ?callable $reque
     return $endpoint === null ? null : webmention_validate_url($endpoint);
 }
 
-function webmention_sender_update_delivery(int $id, string $status, string $endpoint, ?int $httpStatus, string $error, int $now): void
+function webmention_sender_update_delivery(int $id, int $generation, string $status, string $endpoint, ?int $httpStatus, string $error, int $now): bool
 {
     $deliveredAt = $status === 'sent' ? $now : null;
-    plus_database()->prepare(
-        'UPDATE plus_webmention_deliveries SET endpoint_url=?,status=?,last_http_status=?,last_error=?,last_attempt_at=?,delivered_at=?,updated_at=? WHERE id=?'
-    )->execute([$endpoint, $status, $httpStatus, mb_substr(trim($error), 0, 1000), $now, $deliveredAt, $now, $id]);
+    $update = plus_database()->prepare(
+        'UPDATE plus_webmention_deliveries SET endpoint_url=?,status=?,last_http_status=?,last_error=?,last_attempt_at=?,delivered_at=COALESCE(?,delivered_at),updated_at=? WHERE id=? AND generation=?'
+    );
+    $update->execute([$endpoint, $status, $httpStatus, mb_substr(trim($error), 0, 1000), $now, $deliveredAt, $now, $id, $generation]);
+    return $update->rowCount() === 1;
 }
 
 function webmention_sender_deliver(int $id, ?callable $requester = null, ?callable $poster = null, ?int $now = null, ?int $expectedGeneration = null): void
@@ -399,11 +527,12 @@ function webmention_sender_deliver(int $id, ?callable $requester = null, ?callab
     if ($expectedGeneration !== null && (int) $delivery['generation'] !== $expectedGeneration) {
         return;
     }
+    $generation = (int) $delivery['generation'];
     $now ??= time();
     try {
         $endpoint = webmention_sender_discover_endpoint((string) $delivery['target_url'], $requester);
         if ($endpoint === null) {
-            webmention_sender_update_delivery($id, 'unsupported', '', null, '', $now);
+            webmention_sender_update_delivery($id, $generation, 'unsupported', '', null, '', $now);
             return;
         }
         $poster ??= static fn(string $url, array $form): array => webmention_sender_safe_request($url, 'POST', $form, 65536);
@@ -411,14 +540,14 @@ function webmention_sender_deliver(int $id, ?callable $requester = null, ?callab
         if (!is_array($response) || !($response['ok'] ?? false)) {
             $status = is_array($response) ? (int) ($response['status'] ?? 0) : 0;
             $error = is_array($response) ? (string) ($response['error'] ?? 'Webmention endpoint rejected the request.') : 'Invalid Webmention delivery response.';
-            webmention_sender_update_delivery($id, 'failed', $endpoint, $status > 0 ? $status : null, $error, $now);
+            webmention_sender_update_delivery($id, $generation, 'failed', $endpoint, $status > 0 ? $status : null, $error, $now);
             throw new RuntimeException($error);
         }
-        webmention_sender_update_delivery($id, 'sent', $endpoint, (int) ($response['status'] ?? 0), '', $now);
+        webmention_sender_update_delivery($id, $generation, 'sent', $endpoint, (int) ($response['status'] ?? 0), '', $now);
     } catch (Throwable $error) {
         $latest = webmention_sender_get($id);
-        if ($latest !== null && $latest['status'] !== 'failed') {
-            webmention_sender_update_delivery($id, 'failed', (string) ($latest['endpoint_url'] ?? ''), null, $error->getMessage(), $now);
+        if ($latest !== null && (int) $latest['generation'] === $generation && $latest['status'] !== 'failed') {
+            webmention_sender_update_delivery($id, $generation, 'failed', (string) ($latest['endpoint_url'] ?? ''), null, $error->getMessage(), $now);
         }
         throw $error;
     }
@@ -432,5 +561,8 @@ plus_register_job_handler('webmention.send', static function (array $payload): v
         null,
         (int) ($payload['generation'] ?? 0)
     );
+});
+plus_register_job_handler('webmention.reconcile', static function (): void {
+    webmention_sender_reconcile_all_references();
 });
 plus_register_capability('webmention.sender', 1, 0);
