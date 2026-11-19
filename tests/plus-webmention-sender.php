@@ -29,7 +29,18 @@ try {
     require dirname(__DIR__) . '/functions.php';
 
     sender_test_assert(plus_has_capability('webmention.sender', 1, 0), 'Webmention sender capability missing.');
+    $legacy = new PDO('sqlite::memory:');
+    $legacy->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $legacy->exec("CREATE TABLE plus_webmention_deliveries (id INTEGER PRIMARY KEY,source_url TEXT,target_url TEXT,status TEXT,delivered_at INTEGER);CREATE TABLE plus_jobs (type TEXT,payload TEXT,state TEXT,available_at INTEGER,attempts INTEGER,max_attempts INTEGER,unique_key TEXT UNIQUE,created_at INTEGER,updated_at INTEGER);INSERT INTO plus_webmention_deliveries VALUES (1,'https://source.example/post','https://target.example/post','failed',NULL)");
+    $GLOBALS['_pureblog_plus_migrations']['0012_webmention_delivery_lifecycle']($legacy);
+    sender_test_assert((int) $legacy->query('SELECT referenced FROM plus_webmention_deliveries WHERE id=1')->fetchColumn() === 1, 'Upgrade migration did not preserve an existing delivery conservatively.');
+    sender_test_assert((int) $legacy->query("SELECT COUNT(*) FROM plus_jobs WHERE type='webmention.reconcile' AND state='queued'")->fetchColumn() === 1, 'Upgrade migration did not queue bounded reference reconciliation.');
+    sender_test_assert((int) $legacy->query('SELECT COUNT(*) FROM plus_webmention_actionable_failures')->fetchColumn() === 1, 'Upgrade migration did not create the actionable-failure owner view.');
     sender_test_assert(!is_dir(PUREBLOG_PLUS_DATA_PATH), 'Webmention sender initialized storage eagerly.');
+    sender_test_assert(webmention_sender_schedule_content('post', [
+        'title' => 'Empty', 'slug' => 'empty', 'status' => 'published', 'content' => 'No external link.',
+    ], 900) === [], 'Link-free content created a delivery job.');
+    sender_test_assert(!is_dir(PUREBLOG_PLUS_DATA_PATH), 'Link-free content initialized Webmention storage.');
 
     $post = [
         'title' => 'Source',
@@ -107,6 +118,19 @@ try {
     sender_test_assert($posted['endpoint'] === 'https://target.example/header-endpoint?token=1', 'Discovered endpoint query was not preserved.');
     sender_test_assert($posted['form'] === ['source' => 'http://localhost/source', 'target' => 'https://target.example/article'], 'Webmention form fields were incorrect.');
 
+    $inFlightGeneration = (int) $sent['generation'];
+    $reschedulingPoster = static function () use ($delivery): array {
+        webmention_sender_schedule_targets('http://localhost/source', ['https://target.example/article'], 1011);
+        return ['ok' => true, 'status' => 202];
+    };
+    webmention_sender_deliver((int) $delivery['id'], $headerResponse, $reschedulingPoster, 1012, $inFlightGeneration);
+    $rescheduledInFlight = webmention_sender_get((int) $delivery['id']);
+    sender_test_assert(
+        $rescheduledInFlight['status'] === 'queued' && (int) $rescheduledInFlight['generation'] === $inFlightGeneration + 1,
+        'Stale in-flight delivery overwrote a newer queued generation.'
+    );
+    webmention_sender_deliver((int) $delivery['id'], $headerResponse, $poster, 1013, (int) $rescheduledInFlight['generation']);
+
     webmention_sender_schedule_targets('http://localhost/source', ['https://no-endpoint.example/post'], 1020);
     $unsupported = array_values(array_filter(webmention_sender_list(), static fn(array $item): bool => $item['target_url'] === 'https://no-endpoint.example/post'))[0];
     $noEndpointResponse = static fn(string $url, string $method, array $form, int $limit): array => [
@@ -131,11 +155,49 @@ try {
     }
     sender_test_assert(webmention_sender_get((int) $privateDelivery['id'])['status'] === 'failed', 'Rejected private endpoint was not recorded as failed.');
 
+    sender_test_assert(
+        webmention_sender_previous_targets('http://localhost/source') === ['https://target.example/article'],
+        'Only a target with a successful delivery was retained for link-removal updates.'
+    );
+
+    webmention_sender_schedule_targets('http://localhost/source', ['https://target.example/article'], 1037);
+    $failedAfterSuccess = static fn(string $endpoint, array $form): array => [
+        'ok' => false, 'status' => 503, 'error' => 'Temporarily unavailable.',
+    ];
+    try {
+        webmention_sender_deliver((int) $delivery['id'], $headerResponse, $failedAfterSuccess, 1038);
+        throw new RuntimeException('Failed update was accepted.');
+    } catch (RuntimeException) {
+    }
+    $deliveryAfterFailure = webmention_sender_get((int) $delivery['id']);
+    sender_test_assert(
+        $deliveryAfterFailure['status'] === 'failed' && (int) $deliveryAfterFailure['delivered_at'] === 1013,
+        'A later failure erased the proof of an earlier successful delivery.'
+    );
+    sender_test_assert(webmention_sender_failure_count() === 2, 'Current delivery failures were not derived from delivery lifecycle state.');
+
     $rescheduled = webmention_sender_schedule_content('post', [
         'title' => 'Source', 'slug' => 'source', 'status' => 'published', 'content' => 'No links remain.',
     ], 1040);
-    sender_test_assert(count($rescheduled) === 3, 'Previously notified targets were not rescheduled after link removal.');
-    sender_test_assert(count(webmention_sender_schedule_deleted('post', 'source', 1045)) === 3, 'Deleted source did not notify previous targets.');
+    sender_test_assert(count($rescheduled) === 1, 'Link removal rescheduled a target that had never accepted a Webmention.');
+    sender_test_assert((int) webmention_sender_get((int) $privateDelivery['id'])['referenced'] === 0, 'Removed failed target remained current.');
+    sender_test_assert((int) webmention_sender_get((int) $delivery['id'])['referenced'] === 0, 'Removed delivered target remained current.');
+    sender_test_assert(webmention_sender_failure_count() === 0, 'Removed never-delivered target remained an actionable failure.');
+    sender_test_assert(webmention_sender_reconcile_all_references([[
+        'type' => 'post',
+        'content' => ['title' => 'Source', 'slug' => 'source', 'status' => 'published', 'content' => '[Private](https://private-endpoint.example/post)'],
+    ]]) === 1, 'Existing delivery references were not reconciled from current content.');
+    sender_test_assert((int) webmention_sender_get((int) $privateDelivery['id'])['referenced'] === 1, 'Current failed target was not restored by reconciliation.');
+    sender_test_assert(webmention_sender_failure_count() === 1, 'Reconciled current failure was not actionable.');
+    sender_test_assert(count(webmention_sender_schedule_deleted('post', 'source', 1045)) === 1, 'Deleted source did not notify exactly its previously reached targets.');
+    plus_database()->exec('ALTER TABLE plus_jobs RENAME TO plus_jobs_unavailable');
+    try {
+        webmention_sender_retry((int) $unsupported['id'], 1049);
+        throw new RuntimeException('Retry without a queue was accepted.');
+    } catch (PDOException) {
+    }
+    sender_test_assert(webmention_sender_get((int) $unsupported['id'])['status'] === 'unsupported', 'Failed retry left delivery queued without a job.');
+    plus_database()->exec('ALTER TABLE plus_jobs_unavailable RENAME TO plus_jobs');
     sender_test_assert(webmention_sender_retry((int) $unsupported['id'], 1050), 'Manual delivery retry failed.');
     sender_test_assert(webmention_sender_get((int) $unsupported['id'])['status'] === 'queued', 'Manual retry did not reset delivery state.');
 

@@ -20,9 +20,10 @@ PureComments integration, which is not part of this receiver.
 
 Pure Blog Plus also sends Webmentions for external links in published posts and pages.
 Saving content only records local delivery jobs; endpoint discovery and network delivery
-run through the Plus job queue. Updates notify both current and previously recorded targets,
-so receivers can remove links that no longer exist. Renamed, unpublished, and deleted
-sources notify their previous targets as well.
+run through the Plus job queue. Updates notify current targets and targets that accepted an
+earlier delivery, so receivers can remove links that no longer exist. Targets that never
+accepted a Webmention are not retained solely for later removal updates. Renamed, unpublished,
+and deleted sources notify their previously reached targets as well.
 
 The local scheduler runs `php bin/plus-jobs.php` as described in the
 [Plus runtime](plus-runtime.md); no hosted queue is involved.
@@ -34,7 +35,11 @@ as incoming verification. Every `2xx` endpoint response counts as successful del
 
 The private incoming inbox and outgoing delivery status are available under **Admin →
 Webmentions**. Failed, queued, successful, and unsupported deliveries remain local and can
-be retried from the admin area.
+be retried from the admin area. Operational health counts a failed delivery while its target
+is still linked or while a previously successful receiver still needs an update. A removed
+target that never accepted a Webmention remains in the local history without staying an
+actionable failure. Upgrades reconcile this reference state once through the local job queue;
+the migration does not perform network delivery.
 
 Micropub `in-reply-to`, `like-of`, and `repost-of` properties render as verifiable
 Microformats links on the public source page and participate in outgoing delivery.
