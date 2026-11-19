@@ -70,6 +70,16 @@ try {
     $mediaHtml = render_post_media($note);
     micropub_test_assert(str_contains($mediaHtml, 'alt="Example"'), 'Photo accessibility text was not rendered.');
 
+    $videoPost = micropub_properties_to_post([
+        'content' => ['A short video'],
+        'video' => [['value' => 'https://example.test/clip.mp4', 'alt' => 'Fish feeding in an aquarium']],
+    ]);
+    $videoHtml = render_post_media($videoPost);
+    micropub_test_assert(str_contains($videoHtml, 'class="micropub-video"'), 'Micropub video marker was not rendered.');
+    micropub_test_assert(str_contains($videoHtml, 'controls playsinline preload="metadata"'), 'Micropub video fallback controls changed.');
+    micropub_test_assert(str_contains($videoHtml, 'aria-label="Fish feeding in an aquarium"'), 'Video accessibility text was not rendered.');
+    micropub_test_assert(!str_contains($videoHtml, '<figcaption>'), 'Video accessibility text became a visible duplicate.');
+
     $nativePost = [
         'title' => 'Native Markdown', 'slug' => 'native-markdown', 'date' => '2026-11-15 10:00',
         'status' => 'published', 'tags' => [], 'description' => '', 'content' => '**Markdown**',
