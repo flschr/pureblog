@@ -157,6 +157,9 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
     if (isset($properties['photo']) && is_array($properties['photo'])) {
         $properties['photo'] = plus_apply_media_alts_to_photos($properties['photo'], $altContext);
     }
+    if (isset($properties['video']) && is_array($properties['video'])) {
+        $properties['video'] = plus_apply_media_descriptions_to_videos($properties['video']);
+    }
     $published = micropub_first_string($properties, 'published');
     if ($published === '') {
         $published = current_site_datetime_for_storage(load_config());

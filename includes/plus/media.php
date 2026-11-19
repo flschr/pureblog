@@ -39,6 +39,17 @@ function plus_media_types(): array
     ];
 }
 
+function plus_editor_visual_media_accept(): string
+{
+    $accepted = ['.heic', '.heif'];
+    foreach (plus_media_types() as $mime => $extension) {
+        if (!str_starts_with($mime, 'image/') && !str_starts_with($mime, 'video/')) continue;
+        $accepted[] = $mime;
+        $accepted[] = '.' . $extension;
+    }
+    return implode(',', array_values(array_unique($accepted)));
+}
+
 /**
  * Store one upload through the configured media provider.
  *
@@ -81,7 +92,10 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
             throw new InvalidArgumentException('The prepared media file is invalid or unsupported.');
         }
     }
-    if ($kind !== 'any' && !str_starts_with($mime, $kind . '/')) {
+    $kindMatches = $kind === 'any'
+        || ($kind === 'visual' && (str_starts_with($mime, 'image/') || str_starts_with($mime, 'video/')))
+        || str_starts_with($mime, $kind . '/');
+    if (!$kindMatches) {
         throw new InvalidArgumentException('The file type is not supported here.');
     }
 
@@ -388,6 +402,12 @@ function plus_set_media_default_alt(string $id, string $alt): void
     if ($statement->rowCount() !== 1 && plus_media_by_id($id) === null) throw new InvalidArgumentException('Unknown media.');
 }
 
+function plus_update_media_default_alt(string $id, string $alt): void
+{
+    plus_set_media_default_alt($id, $alt);
+    call_hook('on_media_updated', [$id]);
+}
+
 function plus_media_default_alt(string $url, string $context = ''): string
 {
     $media = plus_media_by_url($url);
@@ -402,9 +422,29 @@ function plus_media_default_alt(string $url, string $context = ''): string
     }
 }
 
+function plus_media_description(string $url): string
+{
+    $media = plus_media_by_url($url);
+    return $media === null ? '' : trim((string) ($media['default_alt'] ?? ''));
+}
+
 function plus_markdown_alt(string $alt): string
 {
     return str_replace(['\\', '[', ']'], ['\\\\', '\\[', '\\]'], trim(preg_replace('/\s+/u', ' ', $alt) ?? ''));
+}
+
+function plus_media_editor_markup(array $media): string
+{
+    $url = (string) ($media['url'] ?? '');
+    $mime = (string) ($media['mime_type'] ?? '');
+    if (str_starts_with($mime, 'video/')) {
+        return '<video controls playsinline preload="metadata" src="'
+            . htmlspecialchars($url, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '"></video>';
+    }
+    $filename = basename((string) (($media['original_name'] ?? '') ?: (parse_url($url, PHP_URL_PATH) ?? ($media['id'] ?? 'image'))));
+    $alt = trim((string) ($media['default_alt'] ?? ''));
+    if ($alt === '') $alt = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+    return '![' . plus_markdown_alt($alt) . '](' . $url . ')';
 }
 
 function plus_apply_media_alts_to_markdown(string $content, string $context = ''): string
@@ -459,6 +499,22 @@ function plus_apply_media_alts_to_photos(array $values, string $context = ''): a
     return array_values($values);
 }
 
+/** @param list<mixed> $values @return list<mixed> */
+function plus_apply_media_descriptions_to_videos(array $values): array
+{
+    foreach ($values as $index => $value) {
+        $url = is_string($value) ? $value : (is_array($value) ? (string) ($value['value'] ?? '') : '');
+        $authoredAlt = is_array($value) ? trim((string) ($value['alt'] ?? '')) : '';
+        if ($url === '' || $authoredAlt !== '') continue;
+        $description = plus_media_description($url);
+        if ($description === '') continue;
+        $values[$index] = is_array($value)
+            ? array_replace($value, ['alt' => $description])
+            : ['value' => $url, 'alt' => $description];
+    }
+    return array_values($values);
+}
+
 /** @return list<array{id:string,url:string,alt:string}> */
 function plus_missing_media_alt_suggestions(string $content): array
 {
@@ -488,25 +544,68 @@ function plus_media_list(int $limit = 5000, int $offset = 0): array
 }
 
 /** @return list<array<string,mixed>> */
-function plus_media_referenced_by(string $content, string $featureImage = ''): array
+function plus_media_referenced_by(string $content, string $featureImage = '', array $additionalUrls = []): array
 {
     $result = [];
+    $additional = array_fill_keys(array_filter($additionalUrls, 'is_string'), true);
     foreach (plus_media_list() as $media) {
         $url = (string) $media['url'];
-        if (str_starts_with((string) $media['mime_type'], 'image/')
-            && ($featureImage === $url || str_contains($content, $url))) {
+        $mime = (string) $media['mime_type'];
+        $isImage = str_starts_with($mime, 'image/');
+        $isVideo = str_starts_with($mime, 'video/');
+        if (($isImage || $isVideo)
+            && (($isImage && $featureImage === $url) || str_contains($content, $url) || isset($additional[$url]))) {
             $result[] = $media;
         }
     }
     return $result;
 }
 
+/** @return list<string> */
+function plus_entry_visual_media_urls(array $entry): array
+{
+    $urls = [];
+    foreach (['photo', 'video'] as $type) {
+        $raw = (string) ($entry['micropub_' . $type] ?? '');
+        $values = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($values)) continue;
+        foreach ($values as $value) {
+            $url = is_string($value) ? $value : (is_array($value) ? (string) ($value['value'] ?? '') : '');
+            if ($url !== '') $urls[] = $url;
+        }
+    }
+    return array_values(array_unique($urls));
+}
+
+/** @return list<array<string,mixed>> */
+function plus_managed_media_editor_items(array $entry): array
+{
+    $items = [];
+    foreach (plus_media_referenced_by(
+        (string) ($entry['content'] ?? ''),
+        (string) ($entry['feature_image'] ?? ''),
+        plus_entry_visual_media_urls($entry)
+    ) as $media) {
+        $url = (string) $media['url'];
+        $filename = basename((string) ($media['original_name'] ?: (parse_url($url, PHP_URL_PATH) ?? $media['id'])));
+        $items[] = [
+            'filename' => $filename, 'markdown' => plus_media_editor_markup($media),
+            'url' => $url, 'thumb_url' => $url, 'managed_media' => true,
+            'media_id' => (string) $media['id'],
+            'media_kind' => str_starts_with((string) $media['mime_type'], 'video/') ? 'video' : 'image',
+            'default_alt' => trim((string) ($media['default_alt'] ?? '')),
+        ];
+    }
+    return $items;
+}
+
 function plus_enhance_media_html(string $html): string
 {
-    if (!str_contains($html, '<img') || !is_file(plus_database_path())) {
+    $lower = strtolower($html);
+    if ((!str_contains($lower, '<img') && !str_contains($lower, '<video')) || !is_file(plus_database_path())) {
         return $html;
     }
-    return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
+    $html = preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
         $tag = $match[0];
         if (!preg_match('/\ssrc=["\']([^"\']+)["\']/i', $tag, $source)) {
             return $tag;
@@ -530,6 +629,14 @@ function plus_enhance_media_html(string $html): string
             $attributes .= ' srcset="' . implode(', ', $sources) . '" sizes="(max-width: 720px) calc(100vw - 32px), 680px"';
         }
         return preg_replace('/^<img\b/i', '<img' . $attributes, $tag) ?? $tag;
+    }, $html) ?? $html;
+    return preg_replace_callback('/<video\b[^>]*>/i', static function (array $match): string {
+        $tag = $match[0];
+        if (preg_match('/\saria-label=["\'][^"\']*["\']/i', $tag)) return $tag;
+        if (!preg_match('/\ssrc=["\']([^"\']+)["\']/i', $tag, $source)) return $tag;
+        $description = plus_media_description(html_entity_decode($source[1], ENT_QUOTES | ENT_HTML5));
+        if ($description === '') return $tag;
+        return preg_replace('/>$/', ' aria-label="' . e($description) . '">', $tag, 1) ?? $tag;
     }, $html) ?? $html;
 }
 

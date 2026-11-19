@@ -21,35 +21,36 @@ $editorType = trim($_POST['editor_type'] ?? 'post');
 $messages = [];
 $errors = [];
 
+$uploadField = isset($_FILES['media']) ? 'media' : 'image';
 if ($slug === '') {
     $errors[] = t('admin.editor.error_upload_no_slug');
-} elseif (!isset($_FILES['image'])) {
+} elseif (!isset($_FILES[$uploadField])) {
     $errors[] = t('admin.editor.error_upload_no_file');
 }
 
 $fileList = [];
-if (empty($errors) && isset($_FILES['image'])) {
-    if (is_array($_FILES['image']['name'])) {
-        $count = count($_FILES['image']['name']);
+if (empty($errors) && isset($_FILES[$uploadField])) {
+    if (is_array($_FILES[$uploadField]['name'])) {
+        $count = count($_FILES[$uploadField]['name']);
         for ($i = 0; $i < $count; $i++) {
-            if ($_FILES['image']['error'][$i] === UPLOAD_ERR_NO_FILE && $count > 1) {
+            if ($_FILES[$uploadField]['error'][$i] === UPLOAD_ERR_NO_FILE && $count > 1) {
                 continue;
             }
             $fileList[] = [
-                'name'     => (string) $_FILES['image']['name'][$i],
-                'type'     => (string) ($_FILES['image']['type'][$i] ?? ''),
-                'tmp_name' => (string) ($_FILES['image']['tmp_name'][$i] ?? ''),
-                'error'    => (int) $_FILES['image']['error'][$i],
-                'size'     => (int) $_FILES['image']['size'][$i],
+                'name'     => (string) $_FILES[$uploadField]['name'][$i],
+                'type'     => (string) ($_FILES[$uploadField]['type'][$i] ?? ''),
+                'tmp_name' => (string) ($_FILES[$uploadField]['tmp_name'][$i] ?? ''),
+                'error'    => (int) $_FILES[$uploadField]['error'][$i],
+                'size'     => (int) $_FILES[$uploadField]['size'][$i],
             ];
         }
     } else {
         $fileList[] = [
-            'name'     => (string) $_FILES['image']['name'],
-            'type'     => (string) ($_FILES['image']['type'] ?? ''),
-            'tmp_name' => (string) ($_FILES['image']['tmp_name'] ?? ''),
-            'error'    => (int) $_FILES['image']['error'],
-            'size'     => (int) $_FILES['image']['size'],
+            'name'     => (string) $_FILES[$uploadField]['name'],
+            'type'     => (string) ($_FILES[$uploadField]['type'] ?? ''),
+            'tmp_name' => (string) ($_FILES[$uploadField]['tmp_name'] ?? ''),
+            'error'    => (int) $_FILES[$uploadField]['error'],
+            'size'     => (int) $_FILES[$uploadField]['size'],
         ];
     }
 
@@ -76,9 +77,14 @@ if (empty($errors)) {
         }
 
         try {
-            $media = plus_store_uploaded_media($file, true, null, 'image');
-            $altText = pathinfo(basename((string) $file['name']), PATHINFO_FILENAME) ?: 'image';
-            $messages[] = '![' . str_replace([']', "\r", "\n"], ['\\]', ' ', ' '], $altText) . '](' . $media['url'] . ')';
+            $media = plus_store_uploaded_media($file, true, null, 'visual');
+            if (str_starts_with((string) $media['mime_type'], 'video/')) {
+                $messages[] = '<video controls playsinline preload="metadata" src="'
+                    . htmlspecialchars((string) $media['url'], ENT_QUOTES | ENT_HTML5, 'UTF-8') . '"></video>';
+            } else {
+                $altText = pathinfo(basename((string) $file['name']), PATHINFO_FILENAME) ?: 'image';
+                $messages[] = '![' . str_replace([']', "\r", "\n"], ['\\]', ' ', ' '], $altText) . '](' . $media['url'] . ')';
+            }
         } catch (Throwable $error) {
             $errors[] = $error instanceof InvalidArgumentException
                 ? $error->getMessage()
@@ -91,7 +97,7 @@ $redirect = $editorType === 'page'
     ? base_path() . '/admin/edit-page.php?slug=' . urlencode($slug)
     : base_path() . '/admin/edit-post.php?slug=' . urlencode($slug);
 if (!empty($messages)) {
-    $redirect .= '&uploaded=' . urlencode(implode("\n", $messages));
+    $redirect .= '&uploaded=' . urlencode(implode("\n\n", $messages));
 }
 if (!empty($errors)) {
     $redirect .= '&upload_error=' . urlencode(implode(' ', $errors));

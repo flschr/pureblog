@@ -41,6 +41,17 @@
   const uploadButton = uploadForm?.querySelector('button[type="submit"]');
   let allowUploadSubmit = false;
 
+  function uploadAccepts(file) {
+    const accepted = (uploadInput?.accept || '').toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
+    const mime = (file.type || '').toLowerCase();
+    const filename = (file.name || '').toLowerCase();
+    return accepted.some(value => value.startsWith('.')
+      ? filename.endsWith(value)
+      : value.endsWith('/*')
+        ? mime.startsWith(value.slice(0, -1))
+        : mime === value);
+  }
+
   // Initialize syntax editor on the main content textarea
   const mainEditor = window.createSyntaxEditor(contentField, 'markdown');
 
@@ -618,7 +629,7 @@
         setTimeout(() => notice.remove(), 250);
       });
       const url = new URL(window.location.href);
-      ['saved', 'uploaded', 'upload_error'].forEach((param) => url.searchParams.delete(param));
+      ['saved', 'uploaded', 'upload_error', 'alt_saved', 'alt_error'].forEach((param) => url.searchParams.delete(param));
       window.history.replaceState({}, document.title, url.toString());
     }, 2500);
   }
@@ -673,7 +684,7 @@
   }
 
   function openGalleryPicker(triggerButton) {
-    const listItems = document.querySelectorAll('.image-list li');
+    const listItems = document.querySelectorAll('.image-list li[data-media-kind="image"]');
     if (!listItems.length) {
       return;
     }
@@ -938,7 +949,7 @@
     }
 
     for (const file of event.dataTransfer.files) {
-      if (!file.type.startsWith('image/') && !/\.(?:heic|heif)$/i.test(file.name)) {
+      if (!uploadAccepts(file)) {
         continue;
       }
 

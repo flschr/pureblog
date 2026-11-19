@@ -25,11 +25,12 @@ operational media metadata in the private Plus SQLite database, and renders intr
 dimensions plus `srcset` for known images. Editorial alt text remains in Markdown or the
 structured Micropub `photo` property and is never replaced during rendering.
 
-Each managed image may also retain one editable default description in the operational
+Each managed image or video may also retain one editable default description in the operational
 media record. It is not a second copy of editorial content. When saved Markdown, HTML, or a
 structured Micropub photo contains an empty alt text, the description is copied into that
 occurrence and remains ordinary editable post content. An authored alt text is never replaced.
-The media library can edit or clear the reusable default.
+For a managed video without an authored `video.alt`, the description becomes an assistive
+`aria-label` and is not rendered as a visible caption. The editor can edit or clear the reusable default.
 
 ## Optional providers
 

@@ -1039,6 +1039,23 @@ button.save:hover {
     margin-left: 0;
 }
 
+.video-description-form {
+    display: flex;
+    align-items: end;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.video-description-form label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.75rem;
+}
+
+.video-description-form input {
+    width: 100%;
+}
+
 /* Image library page */
 .image-search-form {
     display: flex;

@@ -178,13 +178,7 @@ if ($post['slug'] !== '') {
         }
     }
 }
-foreach (plus_media_referenced_by((string) $post['content'], (string) ($post['feature_image'] ?? '')) as $media) {
-    $filename = basename((string) ($media['original_name'] ?: (parse_url((string) $media['url'], PHP_URL_PATH) ?? $media['id'])));
-    $images[] = [
-        'filename' => $filename, 'markdown' => '![' . pathinfo($filename, PATHINFO_FILENAME) . '](' . $media['url'] . ')',
-        'url' => (string) $media['url'], 'thumb_url' => (string) $media['url'], 'managed_media' => true,
-    ];
-}
+array_push($images, ...plus_managed_media_editor_items($post));
 
 $allLayouts = get_layouts();
 $currentLayout = trim($post['layout'] ?? '');
@@ -232,10 +226,16 @@ require __DIR__ . '/../includes/admin-head.php';
                     <p class="notice" data-auto-dismiss><?= e(t('admin.editor.notice_saved_post')) ?></p>
                 <?php endif; ?>
                 <?php if (!empty($_GET['uploaded'])): ?>
-                    <p class="notice" data-auto-dismiss><?= e(t('admin.editor.notice_image_uploaded')) ?></p>
+                    <p class="notice" data-auto-dismiss><?= e(t('admin.editor.notice_media_uploaded')) ?></p>
                 <?php endif; ?>
                 <?php if (!empty($_GET['upload_error'])): ?>
                     <p class="notice delete" data-auto-dismiss><?= e($_GET['upload_error']) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($_GET['alt_saved'])): ?>
+                    <p class="notice" data-auto-dismiss><?= e(t('admin.editor.media_description_saved')) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($_GET['alt_error'])): ?>
+                    <p class="notice delete" data-auto-dismiss><?= e($_GET['alt_error']) ?></p>
                 <?php endif; ?>
 
                 <form method="post" class="editor-form" id="editor-form">
@@ -387,60 +387,14 @@ require __DIR__ . '/../includes/admin-head.php';
                     </div>
                 </section>
 
-                <section class="sidebar-section">
-                    <div class="section-divider">
-                        <span class="images-title"><?= e(t('admin.editor.images_title')) ?></span>
-                        <form method="post" action="<?= base_path() ?>/admin/upload-image.php" enctype="multipart/form-data" class="upload-form">
-                            <input type="hidden" name="slug" value="<?= e($post['slug']) ?>">
-                            <input type="hidden" name="date" value="<?= e($post['date']) ?>">
-                            <?= csrf_field() ?>
-                            <label class="hidden" for="image"><?= e(t('admin.editor.upload_label')) ?></label>
-                            <input type="file" id="image" name="image[]" accept="image/*,.avif,.heic,.heif" multiple>
-                            <button type="submit" disabled>
-                                <svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg>
-                                <?= e(t('admin.editor.upload')) ?>
-                            </button>
-                        </form>
-                        <?php if (!$images): ?>
-                            <p><?= e(t('admin.editor.no_images')) ?></p>
-                        <?php else: ?>
-                            <div class="attached-images-header">
-                                <p><?= e(t('admin.editor.attached_images')) ?></p>
-                                <button type="button" class="link-button insert-gallery-btn" title="<?= e(t('admin.editor.insert_gallery_title')) ?>">
-                                    <svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg>
-                                    <?= e(t('admin.editor.insert_gallery')) ?>
-                                </button>
-                            </div>
-                            <ul class="image-list">
-                            <?php foreach ($images as $image):
-                                $imageRawPath = $image['url'];
-                                $isFeature    = ($post['feature_image'] ?? '') === $imageRawPath;
-                            ?>
-                                <li<?= $isFeature ? ' class="is-feature"' : '' ?>>
-                                    <div class="image-list-top">
-                                        <img src="<?= e($image['thumb_url']) ?>" width="30" height="30" class="image-list-preview" alt="<?= e($image['filename']) ?>"/>
-                                        <code><?= e($image['filename']) ?></code>
-                                    </div>
-                                    <div class="image-list-actions">
-                                        <label class="feature-image-label">
-                                            <input type="checkbox" class="feature-image-check" data-url="<?= e($imageRawPath) ?>" data-filename="<?= e($image['filename']) ?>"<?= $isFeature ? ' checked' : '' ?>>
-                                            <?= e(t('admin.editor.feature_image')) ?>
-                                        </label>
-                                        <button type="button" class="link-button copy-markdown" data-markdown="<?= e($image['markdown']) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg> <?= e(t('admin.editor.copy')) ?></button>
-                                        <?php if (empty($image['managed_media'])): ?><form method="post" action="<?= base_path() ?>/admin/delete-image.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.post_editor.delete_image_confirm')) ?>');">
-                                            <input type="hidden" name="slug" value="<?= e($post['slug']) ?>">
-                                            <input type="hidden" name="date" value="<?= e($post['date']) ?>">
-                                            <input type="hidden" name="filename" value="<?= e($image['filename']) ?>">
-                                            <?= csrf_field() ?>
-                                            <button type="submit" class="link-button delete"><svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg> <?= e(t('admin.editor.delete')) ?></button>
-                                        </form><?php endif; ?>
-                                    </div>
-                                </li>
-                            <?php endforeach; ?>
-                            </ul>
-                        <?php endif; ?>
-                    </div>
-                </section>
+                <?php
+                $editorMediaOwner = [
+                    'type' => 'post', 'slug' => (string) $post['slug'], 'date' => (string) $post['date'],
+                    'feature_image' => (string) ($post['feature_image'] ?? ''),
+                    'delete_confirm_key' => 'admin.post_editor.delete_image_confirm',
+                ];
+                require __DIR__ . '/partials/editor-media.php';
+                ?>
             </aside>
         </div>
     </main>
