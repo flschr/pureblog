@@ -137,16 +137,7 @@ if ($page['slug'] !== '') {
         }
     }
 }
-foreach (plus_media_referenced_by((string) $page['content'], (string) ($page['feature_image'] ?? '')) as $media) {
-    $filename = basename((string) ($media['original_name'] ?: (parse_url((string) $media['url'], PHP_URL_PATH) ?? $media['id'])));
-    $kind = str_starts_with((string) $media['mime_type'], 'video/') ? 'video' : 'image';
-    $images[] = [
-        'filename' => $filename, 'markdown' => plus_media_editor_markup($media),
-        'url' => (string) $media['url'], 'thumb_url' => (string) $media['url'], 'managed_media' => true,
-        'media_id' => (string) $media['id'], 'media_kind' => $kind,
-        'default_alt' => trim((string) ($media['default_alt'] ?? '')),
-    ];
-}
+array_push($images, ...plus_managed_media_editor_items($page));
 
 $adminTitle = t($isEditing ? 'admin.page_editor.edit_title' : 'admin.page_editor.new_title');
 $codeMirror = 'markdown';
@@ -249,81 +240,14 @@ require __DIR__ . '/../includes/admin-head.php';
                     </div>
                 </section>
 
-                <section class="sidebar-section">
-                    <div class="section-divider">
-                    <span class="images-title"><?= e(t('admin.editor.media_title')) ?></span>
-                    <form method="post" action="<?= base_path() ?>/admin/upload-image.php" enctype="multipart/form-data" class="upload-form">
-                        <input type="hidden" name="slug" value="<?= e($page['slug']) ?>">
-                        <input type="hidden" name="editor_type" value="page">
-                        <?= csrf_field() ?>
-                        <label class="hidden" for="image"><?= e(t('admin.editor.upload_media_label')) ?></label>
-                        <input type="file" id="image" name="image[]" accept="image/*,video/quicktime,video/mp4,video/webm,.avif,.heic,.heif,.mov,.mp4,.webm" multiple>
-                        <button type="submit" disabled>
-                            <svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg>
-                            <?= e(t('admin.editor.upload')) ?>
-                        </button>
-                    </form>
-                        <?php if (!$images): ?>
-                            <p><?= e(t('admin.editor.no_media')) ?></p>
-                        <?php else: ?>
-                            <div class="attached-images-header">
-                                <p><?= e(t('admin.editor.attached_media')) ?></p>
-                                <?php if (array_filter($images, static fn(array $item): bool => ($item['media_kind'] ?? 'image') === 'image')): ?>
-                                <button type="button" class="link-button insert-gallery-btn" title="<?= e(t('admin.editor.insert_gallery_title')) ?>">
-                                    <svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg>
-                                    <?= e(t('admin.editor.insert_gallery')) ?>
-                                </button>
-                                <?php endif; ?>
-                            </div>
-                            <ul class="image-list">
-                            <?php foreach ($images as $image):
-                                $imageRawPath = $image['url'];
-                                $isFeature    = ($page['feature_image'] ?? '') === $imageRawPath;
-                            ?>
-                                <?php $mediaKind = $image['media_kind'] ?? 'image'; ?>
-                                <li<?= $isFeature ? ' class="is-feature"' : '' ?> data-media-kind="<?= e($mediaKind) ?>">
-                                    <div class="image-list-top">
-                                        <?php if ($mediaKind === 'video'): ?>
-                                            <video src="<?= e($image['thumb_url']) ?>" width="40" height="30" class="image-list-preview" preload="metadata" muted aria-label="<?= e($image['filename']) ?>"></video>
-                                        <?php else: ?>
-                                            <img src="<?= e($image['thumb_url']) ?>" width="30" height="30" class="image-list-preview" alt="<?= e($image['filename']) ?>"/>
-                                        <?php endif; ?>
-                                        <code><?= e($image['filename']) ?></code>
-                                    </div>
-                                    <div class="image-list-actions">
-                                        <?php if ($mediaKind === 'image'): ?>
-                                        <label class="feature-image-label">
-                                            <input type="checkbox" class="feature-image-check" data-url="<?= e($imageRawPath) ?>" data-filename="<?= e($image['filename']) ?>"<?= $isFeature ? ' checked' : '' ?>>
-                                            <?= e(t('admin.editor.feature_image')) ?>
-                                        </label>
-                                        <?php endif; ?>
-                                        <button type="button" class="link-button copy-markdown" data-markdown="<?= e($image['markdown']) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg> <?= e(t('admin.editor.copy')) ?></button>
-                                        <?php if ($mediaKind === 'video' && !empty($image['managed_media'])): ?>
-                                            <form method="post" action="<?= base_path() ?>/admin/update-media-alt.php" class="video-description-form">
-                                                <input type="hidden" name="id" value="<?= e($image['media_id']) ?>">
-                                                <input type="hidden" name="return_to" value="page">
-                                                <input type="hidden" name="slug" value="<?= e($page['slug']) ?>">
-                                                <?= csrf_field() ?>
-                                                <label><?= e(t('admin.editor.video_description')) ?>
-                                                    <input type="text" name="default_alt" maxlength="1500" value="<?= e($image['default_alt']) ?>" placeholder="<?= e(t('admin.editor.video_description_placeholder')) ?>">
-                                                </label>
-                                                <button type="submit" class="link-button"><?= e(t('admin.editor.save')) ?></button>
-                                            </form>
-                                        <?php endif; ?>
-                                        <?php if (empty($image['managed_media'])): ?><form method="post" action="<?= base_path() ?>/admin/delete-image.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.page_editor.delete_image_confirm')) ?>');">
-                                            <input type="hidden" name="slug" value="<?= e($page['slug']) ?>">
-                                            <input type="hidden" name="editor_type" value="page">
-                                            <input type="hidden" name="filename" value="<?= e($image['filename']) ?>">
-                                            <?= csrf_field() ?>
-                                            <button type="submit" class="link-button delete"><svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg> <?= e(t('admin.editor.delete')) ?></button>
-                                        </form><?php endif; ?>
-                                    </div>
-                                </li>
-                            <?php endforeach; ?>
-                            </ul>
-                        <?php endif; ?>
-                        </div>
-                </section>
+                <?php
+                $editorMediaOwner = [
+                    'type' => 'page', 'slug' => (string) $page['slug'],
+                    'feature_image' => (string) ($page['feature_image'] ?? ''),
+                    'delete_confirm_key' => 'admin.page_editor.delete_image_confirm',
+                ];
+                require __DIR__ . '/partials/editor-media.php';
+                ?>
             </aside>
         </div>
     </main>

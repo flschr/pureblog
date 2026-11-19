@@ -124,6 +124,7 @@ function pureblog_plus_protected_release_files(): array
         'admin/media-alt-text.php',
         'admin/update-media-alt.php',
         'admin/delete-media.php',
+        'admin/partials/editor-media.php',
     ];
 }
 

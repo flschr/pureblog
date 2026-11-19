@@ -41,6 +41,17 @@
   const uploadButton = uploadForm?.querySelector('button[type="submit"]');
   let allowUploadSubmit = false;
 
+  function uploadAccepts(file) {
+    const accepted = (uploadInput?.accept || '').toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
+    const mime = (file.type || '').toLowerCase();
+    const filename = (file.name || '').toLowerCase();
+    return accepted.some(value => value.startsWith('.')
+      ? filename.endsWith(value)
+      : value.endsWith('/*')
+        ? mime.startsWith(value.slice(0, -1))
+        : mime === value);
+  }
+
   // Initialize syntax editor on the main content textarea
   const mainEditor = window.createSyntaxEditor(contentField, 'markdown');
 
@@ -938,9 +949,7 @@
     }
 
     for (const file of event.dataTransfer.files) {
-      if (!file.type.startsWith('image/')
-        && !file.type.startsWith('video/')
-        && !/\.(?:heic|heif|mov|mp4|webm)$/i.test(file.name)) {
+      if (!uploadAccepts(file)) {
         continue;
       }
 

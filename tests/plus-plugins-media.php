@@ -28,6 +28,11 @@ function on_prepare_media_upload(array $media): array
     return ['path' => $prepared, 'temporary' => true];
 }
 
+function on_media_updated(string $id): void
+{
+    $GLOBALS['_pureblog_test_updated_media'][] = $id;
+}
+
 $root = sys_get_temp_dir() . '/pureblog-plus-media-' . bin2hex(random_bytes(8));
 define('PUREBLOG_PLUS_DATA_PATH', $root . '/data');
 define('PUREBLOG_MEDIA_PATH', $root . '/public-media');
@@ -139,9 +144,15 @@ try {
     plugin_media_assert(is_file($preparedInput), 'Preparing an upload unexpectedly removed the source.');
     plugin_media_assert(plus_delete_media($preparedMedia['id']), 'Prepared media could not be deleted.');
     $editorScript = file_get_contents(dirname(__DIR__) . '/admin/js/editor.js');
-    plugin_media_assert(is_string($editorScript) && str_contains($editorScript, 'heic|heif|mov|mp4|webm'), 'Prepared image and video extensions are not accepted by editor drop handling.');
-    $editorTemplate = file_get_contents(dirname(__DIR__) . '/admin/edit-post.php');
-    plugin_media_assert(is_string($editorTemplate) && str_contains($editorTemplate, 'video/quicktime') && str_contains($editorTemplate, '.mov'), 'Post editor picker does not accept QuickTime videos.');
+    plugin_media_assert(is_string($editorScript) && str_contains($editorScript, 'uploadAccepts(file)'), 'Editor drop handling does not reuse the picker media policy.');
+    $editorTemplate = file_get_contents(dirname(__DIR__) . '/admin/partials/editor-media.php');
+    plugin_media_assert(is_string($editorTemplate) && str_contains($editorTemplate, 'plus_editor_visual_media_accept()'), 'Editor media picker does not use the shared media policy.');
+    $editorAccept = plus_editor_visual_media_accept();
+    plugin_media_assert(str_contains($editorAccept, 'video/quicktime') && str_contains($editorAccept, '.mov') && str_contains($editorAccept, '.heic'), 'Shared editor media policy omits prepared images or QuickTime video.');
+    foreach (['edit-post.php', 'edit-page.php'] as $editorFile) {
+        $editorSource = file_get_contents(dirname(__DIR__) . '/admin/' . $editorFile);
+        plugin_media_assert(is_string($editorSource) && str_contains($editorSource, "partials/editor-media.php"), $editorFile . ' does not use the shared media owner.');
+    }
     plugin_media_assert(str_contains($editorScript, 'li[data-media-kind="image"]'), 'Video entries can leak into the image gallery picker.');
     $uploadSource = file_get_contents(dirname(__DIR__) . '/admin/upload-image.php');
     plugin_media_assert(is_string($uploadSource) && str_contains($uploadSource, "null, 'visual'"), 'Admin upload remains restricted to images.');
@@ -153,15 +164,17 @@ try {
     ], false, null, 'visual');
     plugin_media_assert($video['mime_type'] === 'video/quicktime', 'QuickTime upload did not retain its detected media type.');
     plugin_media_assert(str_contains(plus_media_editor_markup(plus_media_by_id($video['id'])), '<video controls playsinline preload="metadata"'), 'Video upload did not produce editor video markup.');
-    plus_set_media_default_alt($video['id'], 'Fish feeding between aquarium rocks.');
+    $GLOBALS['_pureblog_test_updated_media'] = [];
+    plus_update_media_default_alt($video['id'], 'Fish feeding between aquarium rocks.');
+    plugin_media_assert($GLOBALS['_pureblog_test_updated_media'] === [$video['id']], 'Editable media description did not publish its invalidation hook.');
     $outpostPost = micropub_properties_to_post([
         'content' => ['Dinner'], 'video' => [$video['url']],
     ]);
     $outpostVideo = json_decode((string) $outpostPost['micropub_video'], true);
     plugin_media_assert(($outpostVideo[0]['alt'] ?? '') === 'Fish feeding between aquarium rocks.', 'Micropub video did not inherit its managed media description.');
     plugin_media_assert(str_contains(render_post_media($outpostPost), 'aria-label="Fish feeding between aquarium rocks."'), 'Micropub video description was not rendered accessibly.');
-    $referencedVideo = plus_media_referenced_by('', '', plus_post_visual_media_urls($outpostPost));
-    plugin_media_assert(count($referencedVideo) === 1 && $referencedVideo[0]['id'] === $video['id'], 'Micropub video was not discoverable in the post editor.');
+    $referencedVideo = plus_managed_media_editor_items($outpostPost);
+    plugin_media_assert(count($referencedVideo) === 1 && $referencedVideo[0]['media_id'] === $video['id'], 'Micropub video was not discoverable in the post editor.');
     $inlineVideo = plus_enhance_media_html('<video controls src="' . $video['url'] . '"></video>');
     plugin_media_assert(str_contains($inlineVideo, 'aria-label="Fish feeding between aquarium rocks."'), 'Inline managed video did not receive its stored description.');
 
