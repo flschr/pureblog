@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Social settings can now define one blog-announcement template with {title} and the required {url} placeholder. The same template applies to admin and Micropub announcements."
+    "instructions": "Outgoing Webmention retries now follow the current delivery lifecycle. Existing delivery references are reconciled once through the local job queue after updating."
 }
