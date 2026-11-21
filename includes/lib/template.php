@@ -45,6 +45,7 @@ function render_post_relationships(array $post): string
         'in_reply_to' => ['u-in-reply-to', t('frontend.in_reply_to')],
         'like_of' => ['u-like-of', t('frontend.like_of')],
         'repost_of' => ['u-repost-of', t('frontend.repost_of')],
+        'bookmark_of' => ['u-bookmark-of', t('frontend.bookmark_of')],
     ] as $property => [$className, $label]) {
         $raw = (string) ($post['micropub_' . $property] ?? '');
         $values = $raw !== '' ? json_decode($raw, true) : [];
@@ -60,6 +61,13 @@ function render_post_relationships(array $post): string
             $host = (string) ($parts['host'] ?? $url);
             $links[] = '<a class="' . $className . '" href="' . e($url) . '">' . e($label) . ' ' . e($host) . '</a>';
         }
+    }
+    $rsvpRaw = (string) ($post['micropub_rsvp'] ?? '');
+    $rsvpValues = $rsvpRaw !== '' ? json_decode($rsvpRaw, true) : [];
+    $rsvp = is_array($rsvpValues) && is_string($rsvpValues[0] ?? null) ? $rsvpValues[0] : '';
+    if (in_array($rsvp, ['yes', 'no', 'maybe', 'interested'], true)) {
+        $links[] = '<data class="p-rsvp" value="' . e($rsvp) . '">'
+            . e(t('frontend.rsvp')) . ': ' . e(t('frontend.rsvp_' . $rsvp)) . '</data>';
     }
     return $links === [] ? '' : '<p class="post-relationships">' . implode('<br>', $links) . '</p>';
 }

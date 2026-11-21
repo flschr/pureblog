@@ -232,13 +232,20 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
         $properties['video'] = plus_apply_media_descriptions_to_videos($properties['video']);
     }
     $published = micropub_first_string($properties, 'published');
+    $config = load_config();
     if ($published === '') {
-        $published = current_site_datetime_for_storage(load_config());
-    } elseif (parse_post_datetime_with_timezone($published, load_config()) === null) {
+        $published = current_site_datetime_for_storage($config);
+    }
+    $publishedDate = parse_post_datetime_with_timezone($published, $config);
+    if ($publishedDate === null) {
         throw new MicropubProtocolException('invalid_request', 'The published value is not a valid date.');
     }
     $name = micropub_first_string($properties, 'name');
     $kind = $name === '' ? 'note' : 'article';
+    $rsvpValues = micropub_string_values($properties, 'rsvp');
+    if (count($rsvpValues) > 1 || ($rsvpValues !== [] && !in_array($rsvpValues[0], ['yes', 'no', 'maybe', 'interested'], true))) {
+        throw new MicropubProtocolException('invalid_request', 'The rsvp value is not supported.');
+    }
     $statusValue = micropub_first_string($properties, 'post-status');
     $statusValue = $statusValue !== '' ? $statusValue : trim((string) ($commands['mp-post-status'] ?? ''));
     if ($statusValue === '' && $existing !== null) {
@@ -249,6 +256,9 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
         $status = $statusValue;
     } else {
         throw new MicropubProtocolException('invalid_request', 'The post-status value is not supported.');
+    }
+    if ($status === 'published' && $publishedDate > new DateTimeImmutable('now', site_timezone_object($config))) {
+        $status = 'scheduled';
     }
     $post = [
         'title' => $name !== '' ? $name : micropub_note_title($content, $published),
@@ -265,14 +275,10 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
         $post['layout'] = (string) ($existing['layout'] ?? '');
         $post['feature_image'] = (string) ($existing['feature_image'] ?? '');
         $post['layout_fields'] = [];
-        $reserved = array_fill_keys([
+        $reserved = array_fill_keys(array_merge([
             'title', 'slug', 'date', 'timestamp', 'status', 'tags', 'description', 'content', 'path',
-            'layout', 'feature_image', 'categories', 'micropub_kind', 'micropub_content_format',
-            'social_announce',
-            'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to',
-            'micropub_like_of', 'micropub_repost_of', 'micropub_bookmark_of', 'micropub_rsvp',
-            'micropub_syndication',
-        ], true);
+            'layout', 'feature_image', 'categories', 'social_announce',
+        ], post_protocol_metadata_fields()), true);
         foreach ($existing as $fieldName => $fieldValue) {
             if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
                 $post['layout_fields'][$fieldName] = (string) $fieldValue;
@@ -354,8 +360,11 @@ function micropub_post_to_properties(array $post): array
             : [$content],
         'published' => [(string) ($post['date'] ?? '')],
         'category' => array_values((array) ($post['tags'] ?? [])),
-        'post-status' => [($post['status'] ?? 'draft') === 'published' ? 'published' : 'draft'],
     ];
+    $status = (string) ($post['status'] ?? 'draft');
+    if (in_array($status, ['draft', 'published'], true)) {
+        $properties['post-status'] = [$status];
+    }
     if (($post['micropub_kind'] ?? 'article') !== 'note') {
         $properties['name'] = [(string) ($post['title'] ?? '')];
     }

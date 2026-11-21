@@ -119,9 +119,22 @@ try {
     micropub_test_assert($outpostPost['status'] === 'draft', 'OutPost draft status was not preserved.');
     micropub_test_assert($outpostSource['properties']['bookmark-of'] === ['https://example.test/article'], 'Bookmark target was not preserved.');
     micropub_test_assert($outpostSource['properties']['rsvp'] === ['maybe'], 'RSVP value was not preserved.');
+    $outpostRelationships = render_post_relationships($outpostPost);
+    micropub_test_assert(str_contains($outpostRelationships, 'class="u-bookmark-of"'), 'Bookmark relationship was not rendered as Microformats2.');
+    micropub_test_assert(str_contains($outpostRelationships, 'class="p-rsvp" value="maybe"'), 'RSVP was not rendered as Microformats2.');
+    micropub_test_throws(static function (): void {
+        micropub_properties_to_post(['content' => ['Invalid RSVP'], 'rsvp' => ['later']]);
+    }, 'invalid_request');
     $listed = micropub_source_list(1, 0, [$outpostPost, $note]);
     micropub_test_assert(count($listed['items']) === 1, 'Post-list limit was not applied.');
     micropub_test_assert($listed['items'][0]['properties']['post-status'] === ['draft'], 'Post list omitted draft status.');
+    $scheduledSource = micropub_source(array_replace($outpostPost, ['status' => 'scheduled']));
+    micropub_test_assert(!isset($scheduledSource['properties']['post-status']), 'Scheduled post was misrepresented as a Micropub draft.');
+    micropub_test_assert(
+        micropub_properties_to_post($scheduledSource['properties'], [], array_replace($outpostPost, ['status' => 'scheduled']))['status'] === 'scheduled',
+        'Editing a scheduled post without a status change removed its schedule.'
+    );
+    micropub_test_assert(in_array('micropub_bookmark_of', post_protocol_metadata_fields(), true), 'Bookmark metadata was absent from the canonical persistence contract.');
     micropub_test_assert(
         micropub_categories('per', 10, 0, [
             ['tags' => ['Photos', 'Personal']],
@@ -131,6 +144,13 @@ try {
     );
     micropub_test_assert(micropub_query_window('500', '2') === [100, 2], 'Query limits were not bounded.');
     micropub_test_throws(static fn(): array => micropub_query_window('-1', null), 'invalid_request');
+    $futurePost = micropub_properties_to_post([
+        'name' => ['Scheduled from OutPost'],
+        'content' => ['Not public yet'],
+        'published' => ['2099-01-02T10:00:00+01:00'],
+        'post-status' => ['published'],
+    ]);
+    micropub_test_assert($futurePost['status'] === 'scheduled', 'A future published date bypassed the canonical scheduler.');
 
     $draftPost = array_replace($nativePost, ['status' => 'draft']);
     $draftProperties = micropub_post_to_properties($draftPost);

@@ -21,7 +21,7 @@
         "includes/plus/indieauth.php": "75204e9cd504391f82bcfb8a96201955dd08721d3d770745b37189b24d0bd804",
         "includes/plus/indieauth-client.php": "81c70b3e9bdb37936ac6f83876038dc1b18cc326e5ee2f00264c0f4a63405581",
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
-        "includes/plus/micropub.php": "3d7fb46da3a663d6ad8f564544ad01d2558e50d94aa0de507c31a5455055c1ea",
+        "includes/plus/micropub.php": "abb72e1b8e4efcc4d0bb14d0033fae111403b15ad3f203a92725cf415b6953f8",
         "includes/plus/webmentions.php": "34dc5dafa73ede0ae6ab3b1fb65a914b7b425f6741e4b5dcfaf84e49774cb214",
         "includes/plus/webmention-sender.php": "94605c45fb612f01a8e775b529bd20cef5d92a9b3cd34c5e62a72e96ce157e5c",
         "includes/plus/social-connector.php": "4692d8ac650e0b4b839ae4e0a6b4589e4eec2d565be9162610ff866d445c900f",

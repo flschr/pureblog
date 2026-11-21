@@ -34,6 +34,16 @@ admin editor can preserve them. This includes replies, likes, reposts, bookmarks
 values, syndication URLs, and image/audio/video properties. SQLite contains credentials
 and operational state, never a second copy of editorial content.
 
+Relationship metadata is rendered from that same stored representation. Replies, likes,
+reposts, and bookmarks expose their corresponding Microformats2 link classes; RSVP values
+are validated and rendered as `p-rsvp`. Those links consequently participate in the normal
+Webmention sender rather than using a separate Micropub delivery path. A locally scheduled
+post omits `post-status` from source responses because Micropub defines only `draft` and
+`published`; this prevents an unchanged client edit from silently replacing the schedule.
+Creating or updating a `published` entry with a future `published` date enters the existing
+Pure Blog scheduler, so it is neither rendered publicly nor announced socially before that
+time.
+
 Media Endpoint uploads use the bundled plugin contract. The standalone default stores them
 under `content/media/YYYY/MM` with random names. The server determines the actual MIME type,
 accepts a bounded set of image, audio, and video formats, rejects files above 100 MB, and
