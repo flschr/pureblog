@@ -27,6 +27,58 @@ plus_register_migration('0009_media_delete_state', static function (PDO $databas
     $database->exec("ALTER TABLE plus_media ADD COLUMN delete_state TEXT NOT NULL DEFAULT 'active' CHECK (delete_state IN ('active','deleting'))");
 });
 
+plus_register_migration('0012_media_capture_evidence', static function (PDO $database): void {
+    $columns = array_column($database->query('PRAGMA table_info(plus_media)')->fetchAll(), 'name');
+    if (!in_array('capture_metadata', $columns, true)) {
+        $database->exec("ALTER TABLE plus_media ADD COLUMN capture_metadata INTEGER NOT NULL DEFAULT 0 CHECK (capture_metadata IN (0,1))");
+    }
+    if (!in_array('capture_time', $columns, true)) {
+        $database->exec("ALTER TABLE plus_media ADD COLUMN capture_time INTEGER NOT NULL DEFAULT 0 CHECK (capture_time IN (0,1))");
+    }
+    if (!in_array('source_fingerprint', $columns, true)) {
+        $database->exec("ALTER TABLE plus_media ADD COLUMN source_fingerprint TEXT NOT NULL DEFAULT ''");
+    }
+});
+
+/** @return array{capture_metadata:bool,capture_time:bool} */
+function plus_media_capture_evidence(string $path, string $mime): array
+{
+    $result = ['capture_metadata' => false, 'capture_time' => false];
+    if (!in_array($mime, ['image/jpeg', 'image/tiff'], true) || !function_exists('exif_read_data')) {
+        return $result;
+    }
+    try {
+        $exif = @exif_read_data($path, null, true, false);
+    } catch (Throwable) {
+        return $result;
+    }
+    if (!is_array($exif)) return $result;
+    $flat = [];
+    foreach ($exif as $section) {
+        if (!is_array($section)) continue;
+        foreach ($section as $key => $value) $flat[(string) $key] = $value;
+    }
+    foreach (['Make', 'Model', 'ExposureTime', 'FNumber', 'ISOSpeedRatings', 'FocalLength'] as $key) {
+        if (isset($flat[$key]) && is_scalar($flat[$key]) && trim((string) $flat[$key]) !== '') {
+            $result['capture_metadata'] = true;
+            break;
+        }
+    }
+    foreach (['DateTimeOriginal', 'DateTimeDigitized'] as $key) {
+        if (isset($flat[$key]) && is_scalar($flat[$key]) && trim((string) $flat[$key]) !== '') {
+            $result['capture_time'] = true;
+            break;
+        }
+    }
+    return $result;
+}
+
+function plus_media_source_fingerprint(string $path): string
+{
+    $hash = is_file($path) ? hash_file('sha256', $path) : false;
+    return is_string($hash) ? $hash : '';
+}
+
 /** @return array<string,string> */
 function plus_media_types(): array
 {
@@ -128,11 +180,13 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
     $stored = null;
     try {
         [$width, $height] = plus_media_dimensions($source, $mime);
+        $captureEvidence = ['capture_metadata' => false, 'capture_time' => false];
         if (str_starts_with($mime, 'image/')) {
             $maximumPixels = class_exists('Imagick') ? 60000000 : 30000000;
             if ($width < 1 || $height < 1 || $width > 20000 || $height > 20000 || $width * $height > $maximumPixels) {
                 throw new InvalidArgumentException('The image dimensions are invalid or too large for this server.');
             }
+            $captureEvidence = plus_media_capture_evidence($source, $mime);
             plus_normalize_image($source, $mime);
             call_hook('on_image_uploaded', [$source]);
             [$width, $height] = plus_media_dimensions($source, $mime);
@@ -165,14 +219,14 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
             }
         }
         $statement = $database->prepare(
-            'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,width,height,variants_json,provider_data_json,local_source,created_at) '
-            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,width,height,variants_json,provider_data_json,local_source,created_at,capture_metadata,capture_time,source_fingerprint) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $statement->execute([
             $id, $provider['id'], $url, $mime, basename((string) ($file['name'] ?? $originalName)), $width ?: null, $height ?: null,
             json_encode($variants, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             json_encode((array) ($stored['provider_data'] ?? []), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            $source, $createdAt,
+            $source, $createdAt, $captureEvidence['capture_metadata'] ? 1 : 0, $captureEvidence['capture_time'] ? 1 : 0, '',
         ]);
         return [
             'id' => $id, 'provider' => $provider['id'], 'url' => $url, 'mime_type' => $mime,

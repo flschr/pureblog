@@ -1037,3 +1037,105 @@ dialog.pb-lightbox::backdrop {
         right: 0.5rem;
     }
 }
+
+/* Personal photo gallery plugin */
+.personal-photo-gallery {
+    width: min(96rem, calc(100% - 2rem));
+    max-width: none;
+    margin-inline: auto;
+}
+
+.personal-photo-gallery-heading {
+    width: min(42rem, 100%);
+    margin: 0 auto 2rem;
+    text-align: center;
+}
+
+.personal-photo-gallery-items {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.personal-photo-gallery-row {
+    display: grid;
+    grid-template-columns: var(--photo-columns);
+    align-items: stretch;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.personal-photo-gallery-item {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    border-radius: 5px;
+    background: var(--accent-bg-color);
+}
+
+.personal-photo-gallery-link,
+.personal-photo-gallery-link img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.personal-photo-gallery-link {
+    border: 0;
+    line-height: 0;
+    overflow: hidden;
+}
+
+.personal-photo-gallery-link img {
+    object-fit: cover;
+    margin: 0 !important;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.personal-photo-gallery-link:hover img,
+.personal-photo-gallery-link:focus-visible img {
+    transform: scale(1.02);
+    filter: brightness(1.04);
+}
+
+.personal-photo-gallery-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    min-height: 3rem;
+    margin: 2rem 0;
+}
+
+.personal-photo-gallery-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.pb-lightbox-source {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+}
+
+.pb-lightbox-source a {
+    color: #fff;
+}
+
+@media (max-width: 600px) {
+    .personal-photo-gallery {
+        width: min(100% - 1rem, 96rem);
+    }
+
+    .personal-photo-gallery-items,
+    .personal-photo-gallery-row {
+        gap: 0.35rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .personal-photo-gallery-link img {
+        transition: none;
+    }
+}

@@ -674,6 +674,7 @@ function render_lightbox_markup(): string
     <figure class="pb-lightbox-figure">
       <img src="" alt="" class="pb-lightbox-image">
       <figcaption class="pb-lightbox-caption"></figcaption>
+      <p class="pb-lightbox-source"><a href=""></a></p>
     </figure>
     <div class="pb-lightbox-counter" aria-live="polite"></div>
   </div>
@@ -685,6 +686,8 @@ function render_lightbox_markup(): string
 
   const img = dialog.querySelector('.pb-lightbox-image');
   const caption = dialog.querySelector('.pb-lightbox-caption');
+  const source = dialog.querySelector('.pb-lightbox-source');
+  const sourceLink = source.querySelector('a');
   const counter = dialog.querySelector('.pb-lightbox-counter');
   const prevBtn = dialog.querySelector('.pb-lightbox-prev');
   const nextBtn = dialog.querySelector('.pb-lightbox-next');
@@ -692,21 +695,34 @@ function render_lightbox_markup(): string
 
   let activeItems = [];
   let currentIndex = -1;
+  let lastTrigger = null;
 
   function update() {
     if (currentIndex < 0 || currentIndex >= activeItems.length) return;
     const item = activeItems[currentIndex];
     const src = item.getAttribute('href') || '';
     const cap = item.getAttribute('data-caption') || '';
+    const alt = item.getAttribute('data-alt') || cap || 'Gallery image';
+    const sourceUrl = item.getAttribute('data-source-url') || '';
+    const sourceTitle = item.getAttribute('data-source-title') || '';
 
     img.src = src;
-    img.alt = cap || 'Gallery image';
+    img.alt = alt;
     if (cap) {
       caption.textContent = cap;
       caption.style.display = 'block';
     } else {
       caption.textContent = '';
       caption.style.display = 'none';
+    }
+    if (sourceUrl) {
+      sourceLink.href = sourceUrl;
+      sourceLink.textContent = sourceTitle || 'View source post';
+      source.style.display = 'block';
+    } else {
+      sourceLink.removeAttribute('href');
+      sourceLink.textContent = '';
+      source.style.display = 'none';
     }
 
     if (activeItems.length > 1) {
@@ -727,22 +743,24 @@ function render_lightbox_markup(): string
     update();
   }
 
-  document.querySelectorAll('a[data-pb-lightbox]').forEach(link => {
-    link.addEventListener('click', e => {
-      e.preventDefault();
-      const gallery = link.closest('.gallery');
-      activeItems = gallery
-        ? Array.from(gallery.querySelectorAll('a[data-pb-lightbox]'))
-        : [link];
-      currentIndex = activeItems.indexOf(link);
-      if (currentIndex === -1) currentIndex = 0;
-      update();
-      if (typeof dialog.showModal === 'function') {
-        dialog.showModal();
-      } else {
-        dialog.setAttribute('open', '');
-      }
-    });
+  document.addEventListener('click', e => {
+    const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+    const link = target?.closest('a[data-pb-lightbox]');
+    if (!link) return;
+    e.preventDefault();
+    lastTrigger = link;
+    const gallery = link.closest('.gallery, [data-photo-gallery-items]');
+    activeItems = gallery
+      ? Array.from(gallery.querySelectorAll('a[data-pb-lightbox]'))
+      : [link];
+    currentIndex = activeItems.indexOf(link);
+    if (currentIndex === -1) currentIndex = 0;
+    update();
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
   });
 
   closeBtn?.addEventListener('click', () => dialog.close());
@@ -765,6 +783,7 @@ function render_lightbox_markup(): string
 
   dialog.addEventListener('close', () => {
     img.src = '';
+    if (lastTrigger?.isConnected) lastTrigger.focus();
   });
 
   document.addEventListener('keydown', e => {

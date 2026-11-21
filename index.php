@@ -67,6 +67,12 @@ foreach ($customRoutes as $customRoute) {
     exit;
 }
 
+if (plus_public_route_matches($requestPathWithSlash, $config)
+    && !published_content_slug_exists($requestPath)
+    && plus_dispatch_public_route($requestPathWithSlash, $config)) {
+    exit;
+}
+
 $isTag = str_starts_with($requestPath, 'tag/');
 $tagParam = $isTag ? rawurldecode(substr($requestPath, 4)) : '';
 $reservedPaths = [
@@ -86,6 +92,9 @@ $isSingle = !$isTag && $requestPath !== ''
 
 $pageData = $isSingle ? get_page_by_slug($requestPath, false) : null;
 $post = $isSingle && !$pageData ? get_post_by_slug($requestPath, false) : null;
+if ($pageData === null && $post === null && plus_dispatch_public_route($requestPathWithSlash, $config)) {
+    exit;
+}
 $tagSlug = $isTag ? normalize_tag($tagParam) : '';
 $tagPosts = [];
 if ($isTag && $tagSlug !== '') {

@@ -168,6 +168,9 @@ function save_config(array $config): bool
         if (function_exists('load_config')) {
             load_config(true);
         }
+        if (function_exists('cache_clear')) {
+            cache_clear();
+        }
     }
     return $saved;
 }
@@ -1349,6 +1352,19 @@ function find_post_filepath_by_slug(string $slug): ?string
     return null;
 }
 
+function published_content_slug_exists(string $slug): bool
+{
+    if ($slug === '') return false;
+    foreach ([PUREBLOG_POSTS_PATH, PUREBLOG_PAGES_PATH] as $directory) {
+        if (!is_dir($directory)) continue;
+        foreach (glob($directory . '/*.md') ?: [] as $file) {
+            $front = parse_post_meta_only($file);
+            if (($front['status'] ?? 'draft') === 'published' && ($front['slug'] ?? '') === $slug) return true;
+        }
+    }
+    return false;
+}
+
 function delete_post_by_slug(string $slug): bool
 {
     $deleted = pureblog_with_content_mutation_lock(
@@ -1358,6 +1374,7 @@ function delete_post_by_slug(string $slug): bool
         webmention_sender_content_deleted('post', $slug);
         social_content_deleted($slug);
         call_hook('on_post_deleted', [$slug]);
+        plus_emit_plugin_event('post.deleted', [$slug]);
     }
     return $deleted;
 }
@@ -1421,6 +1438,7 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     }
     webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
     social_content_saved($post, $originalSlug, $originalStatus);
+    plus_emit_plugin_event('post.saved', [$post, $originalSlug, $originalStatus]);
     return true;
 }
 
