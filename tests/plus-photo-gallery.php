@@ -62,13 +62,19 @@ try {
     ]) === [], 'Plain-text Micropub content was parsed as authored image markup.');
 
     $classes = [];
+    $providerSideEffect = null;
     plus_register_plugin([
         'id' => 'test-photo-classifier',
         'name' => 'Test photo classifier',
         'version' => '1.0.0',
         'api_version' => PUREBLOG_PLUGIN_API_VERSION,
         'capabilities' => [
-            'media.photo_classification' => static function (array $media) use (&$classes): array {
+            'media.photo_classification' => static function (array $media) use (&$classes, &$providerSideEffect): array {
+                if (is_callable($providerSideEffect)) {
+                    $sideEffect = $providerSideEffect;
+                    $providerSideEffect = null;
+                    $sideEffect();
+                }
                 $id = (string) $media['id'];
                 $result = array_key_exists($id, $classes)
                     ? $classes[$id]
@@ -163,6 +169,16 @@ try {
         $classes[$id] = $name === 'outage' ? null : ['class' => $class, 'confidence' => $confidence, 'reason' => 'fixture:' . $class];
     }
     $occurrenceInsert->execute(['older-camera-post', $keys['camera'], $ids['camera'], 0, 'Older occurrence', '', 'Older lake post', '2026-10-01 10:00:00', 'Older lake post']);
+
+    $providerSideEffect = static function () use ($ids): void {
+        $concurrent = new PDO('sqlite:' . plus_database_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $concurrent->exec('PRAGMA busy_timeout = 5000');
+        $update = $concurrent->prepare("UPDATE plus_media SET default_alt='concurrent write' WHERE id=?");
+        $update->execute([$ids['camera']]);
+    };
+    $concurrentClassification = personal_photo_gallery_classify($keys['unknown']);
+    photo_gallery_assert(($concurrentClassification['automatic_state'] ?? '') === 'unknown',
+        'A concurrent live write prevented a provider result from being stored.');
 
     $taggedId = hash('md5', 'media-tagged-camera');
     $taggedKey = hash('sha256', 'asset-tagged-camera');
@@ -348,7 +364,9 @@ try {
         && str_contains($frontController, '!published_content_slug_exists($requestPath)')
         && strrpos($frontController, 'plus_dispatch_public_route') > strpos($frontController, 'get_post_by_slug'), 'A plugin route can shadow an existing post or page.');
     $script = file_get_contents(dirname(__DIR__) . '/assets/js/photo-gallery.js');
-    photo_gallery_assert(is_string($script) && strlen($script) < 3000 && !str_contains($script, 'Mehr laden'), 'Public enhancement is too large or not localized.');
+    photo_gallery_assert(is_string($script) && strlen($script) < 3000 && !str_contains($script, 'Mehr laden')
+        && str_contains($script, 'IntersectionObserver') && str_contains($script, 'window.location.assign'),
+        'Progressive infinite scrolling is too large, not localized, or lacks its pagination fallback.');
 
     echo "Personal photo gallery contract passed.\n";
 } finally {

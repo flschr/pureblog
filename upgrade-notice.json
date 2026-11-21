@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Micropub clients can now list posts and drafts, discover categories and supported post types, and preserve bookmarks and RSVPs. Media uploads accept both standard create tokens and dedicated media tokens."
+    "instructions": "Photo classification now releases SQLite read snapshots before external provider work, so concurrent live writes no longer force otherwise successful gallery jobs to retry. Gallery pagination progressively loads the next page near the viewport while preserving the normal link as a no-JavaScript and error fallback."
 }
