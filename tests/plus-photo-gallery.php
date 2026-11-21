@@ -109,16 +109,21 @@ try {
     $legacy->exec("CREATE TABLE plus_photo_gallery_classifications (asset_key TEXT PRIMARY KEY REFERENCES plus_photo_gallery_assets(asset_key) ON DELETE CASCADE,visual_class TEXT NOT NULL,confidence REAL NOT NULL,automatic_state TEXT NOT NULL,reason TEXT NOT NULL,classifier_id TEXT NOT NULL,classifier_version TEXT NOT NULL,source_fingerprint TEXT NOT NULL,updated_at INTEGER NOT NULL)");
     $legacy->exec("INSERT INTO plus_photo_gallery_classifications VALUES ('legacy-asset','camera_photo',0.99,'visible','legacy','local','1','legacy-signature',1)");
     $legacy->exec("CREATE TABLE plus_photo_gallery_overrides (asset_key TEXT PRIMARY KEY REFERENCES plus_photo_gallery_assets(asset_key) ON DELETE CASCADE,visibility TEXT NOT NULL,updated_at INTEGER NOT NULL)");
+    $legacy->exec("CREATE TABLE plus_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT,type TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,available_at INTEGER NOT NULL,attempts INTEGER NOT NULL,max_attempts INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
     ($GLOBALS['_pureblog_plus_migrations']['0012_media_capture_evidence'])($legacy);
     ($GLOBALS['_pureblog_plus_migrations']['0013_personal_photo_gallery'])($legacy);
     ($GLOBALS['_pureblog_plus_migrations']['0015_personal_photo_gallery_sources'])($legacy);
+    ($GLOBALS['_pureblog_plus_migrations']['0016_media_visual_fingerprint'])($legacy);
     $legacyOccurrence = $legacy->query('SELECT media_id FROM plus_photo_gallery_latest_occurrences')->fetchColumn();
     $legacySource = $legacy->query('SELECT source_type || \':\' || source_id FROM plus_photo_gallery_latest_occurrences')->fetchColumn();
     $legacySignature = $legacy->query('SELECT input_signature FROM plus_photo_gallery_classifications')->fetchColumn();
     $legacyAssetColumns = array_column($legacy->query('PRAGMA table_info(plus_photo_gallery_assets)')->fetchAll(), 'name');
+    $legacyMediaColumns = array_column($legacy->query('PRAGMA table_info(plus_media)')->fetchAll(), 'name');
+    $legacyRebuilds = (int) $legacy->query("SELECT COUNT(*) FROM plus_jobs WHERE type='photo-gallery.rebuild' AND state='queued'")->fetchColumn();
     $legacy->exec("INSERT INTO plus_photo_gallery_assets (asset_key) VALUES ('new-asset')");
     photo_gallery_assert($legacyOccurrence === 'legacy-media' && $legacySource === 'post:legacy-post' && $legacySignature === 'legacy-signature'
-        && $legacyAssetColumns === ['asset_key'], 'The first gallery schema cannot be upgraded without losing projection data or accepting new assets.');
+        && $legacyAssetColumns === ['asset_key'] && in_array('visual_fingerprint', $legacyMediaColumns, true)
+        && $legacyRebuilds === 1, 'The first gallery schema cannot be upgraded without preserving its projection and scheduling visual reconciliation.');
 
     $database = plus_database();
     photo_gallery_assert((int) $database->query("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='plus_photo_gallery_occurrence_asset_idx'")->fetchColumn() === 1, 'Latest-occurrence queries have no asset-first index.');
@@ -172,6 +177,65 @@ try {
         $classes[$id] = $name === 'outage' ? null : ['class' => $class, 'confidence' => $confidence, 'reason' => 'fixture:' . $class];
     }
     $occurrenceInsert->execute(['post', 'older-camera-post', '', $keys['camera'], $ids['camera'], 0, 'Older occurrence', '', 'Older lake post', '2026-10-01 10:00:00', 'Older lake post']);
+
+    if (!extension_loaded('gd')) throw new RuntimeException('GD is required for the gallery deduplication contract test.');
+    $visualSource = imagecreatetruecolor(320, 240);
+    $sky = imagecolorallocate($visualSource, 52, 128, 190);
+    $ground = imagecolorallocate($visualSource, 75, 126, 61);
+    $sun = imagecolorallocate($visualSource, 248, 205, 54);
+    imagefill($visualSource, 0, 0, $sky);
+    imagefilledrectangle($visualSource, 0, 145, 319, 239, $ground);
+    imagefilledellipse($visualSource, 255, 55, 44, 44, $sun);
+    $visualBlogPath = $root . '/visual-blog.jpg';
+    $visualSocialPath = $root . '/visual-social.jpg';
+    imagejpeg($visualSource, $visualBlogPath, 94);
+    imagejpeg($visualSource, $visualSocialPath, 68);
+    $visualDifferent = imagecreatetruecolor(320, 240);
+    imagefill($visualDifferent, 0, 0, $ground);
+    imagefilledrectangle($visualDifferent, 0, 0, 319, 90, $sky);
+    imagefilledellipse($visualDifferent, 60, 185, 44, 44, $sun);
+    $visualDifferentPath = $root . '/visual-different.jpg';
+    imagejpeg($visualDifferent, $visualDifferentPath, 82);
+
+    $visualBlogHash = plus_media_visual_fingerprint($visualBlogPath, 'image/jpeg');
+    $visualSocialHash = plus_media_visual_fingerprint($visualSocialPath, 'image/jpeg');
+    $visualDifferentHash = plus_media_visual_fingerprint($visualDifferentPath, 'image/jpeg');
+    photo_gallery_assert(strlen($visualBlogHash) === 128
+        && personal_photo_gallery_visual_distance($visualBlogHash, $visualSocialHash) <= 12,
+        'Ordinary image recompression no longer resolves to the same visual identity.');
+    photo_gallery_assert(personal_photo_gallery_visual_distance($visualBlogHash, $visualDifferentHash) > 12,
+        'Different photographs are too easily collapsed by the visual identity threshold.');
+
+    $visualBlogId = hash('md5', 'visual-blog');
+    $visualSocialId = hash('md5', 'visual-social');
+    $visualBlogKey = hash('sha256', 'visual-blog-exact');
+    $visualSocialKey = hash('sha256', 'visual-social-exact');
+    $mediaInsert->execute([$visualBlogId, 'local-media', 'https://media.example.test/visual-blog.jpg', 'image/jpeg', 'visual-blog.jpg', 320, 240, '{}', '{}', $visualBlogPath, time(), 0, 0, $visualBlogKey]);
+    $mediaInsert->execute([$visualSocialId, 'local-media', 'https://media.example.test/visual-social.jpg', 'image/jpeg', 'visual-social.jpg', 1600, 1200, '{}', '{}', $visualSocialPath, time(), 0, 0, $visualSocialKey]);
+    $assetInsert->execute([$visualBlogKey]);
+    $assetInsert->execute([$visualSocialKey]);
+    $occurrenceInsert->execute(['post', 'visual-blog-post', '', $visualBlogKey, $visualBlogId, 0, 'Same mountain', '', 'Blog photo', '2026-06-20 10:00:00', 'Blog photo']);
+    $occurrenceInsert->execute(['social', '1:visual-copy', 'https://social.example/visual-copy', $visualSocialKey, $visualSocialId, 0, 'Same mountain', '', 'Social photo', '2026-06-20 10:05:00', 'Social photo']);
+    personal_photo_gallery_store_classification($visualBlogKey, 'camera_photo', 0.99, 'visible', 'fixture:camera_photo', 'local', '1', 'visual-blog');
+    personal_photo_gallery_store_classification($visualSocialKey, 'camera_photo', 0.99, 'visible', 'fixture:camera_photo', 'local', '1', 'visual-social');
+    personal_photo_gallery_set_visibility($visualSocialKey, 'hidden');
+    personal_photo_gallery_media_visual_fingerprint(plus_media_by_url('https://media.example.test/visual-blog.jpg'));
+    $visualIdentity = personal_photo_gallery_resolve_asset(
+        plus_media_by_url('https://media.example.test/visual-social.jpg'),
+        $visualSocialKey
+    );
+    photo_gallery_assert($visualIdentity['asset_key'] === $visualBlogKey
+        && in_array($visualSocialKey, $visualIdentity['merge_asset_keys'], true),
+        'A recompressed Social copy did not select the existing Blog asset.');
+    plus_begin_immediate($database);
+    personal_photo_gallery_merge_assets($database, $visualIdentity['asset_key'], $visualIdentity['merge_asset_keys']);
+    $database->exec('COMMIT');
+    photo_gallery_assert((int) $database->query("SELECT COUNT(DISTINCT asset_key) FROM plus_photo_gallery_occurrences WHERE source_id IN ('visual-blog-post','1:visual-copy')")->fetchColumn() === 1,
+        'Recompressed Blog and Social occurrences still own separate gallery assets.');
+    photo_gallery_assert($database->query("SELECT visibility FROM plus_photo_gallery_overrides WHERE asset_key='{$visualBlogKey}'")->fetchColumn() === false,
+        'Hiding only the redundant copy incorrectly hid the surviving visible photograph.');
+    $database->prepare('DELETE FROM plus_photo_gallery_assets WHERE asset_key=?')->execute([$visualBlogKey]);
+    $database->prepare('DELETE FROM plus_media WHERE id IN (?,?)')->execute([$visualBlogId, $visualSocialId]);
 
     $providerSideEffect = static function () use ($ids): void {
         $concurrent = new PDO('sqlite:' . plus_database_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

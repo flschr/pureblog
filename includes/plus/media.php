@@ -40,6 +40,28 @@ plus_register_migration('0012_media_capture_evidence', static function (PDO $dat
     }
 });
 
+plus_register_migration('0016_media_visual_fingerprint', static function (PDO $database): void {
+    $columns = array_column($database->query('PRAGMA table_info(plus_media)')->fetchAll(), 'name');
+    if (!in_array('visual_fingerprint', $columns, true)) {
+        $database->exec("ALTER TABLE plus_media ADD COLUMN visual_fingerprint TEXT NOT NULL DEFAULT ''");
+    }
+    $database->exec('CREATE INDEX IF NOT EXISTS plus_media_visual_fingerprint_idx ON plus_media (visual_fingerprint)');
+
+    // Existing galleries need one controlled pass so Blog assets are fingerprinted
+    // before Social copies are reconciled. Fresh installations have no projection.
+    $hasGallery = (int) $database->query(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='plus_photo_gallery_occurrences'"
+    )->fetchColumn() === 1;
+    if ($hasGallery && (int) $database->query('SELECT COUNT(*) FROM plus_photo_gallery_occurrences')->fetchColumn() > 0) {
+        $now = time();
+        $insert = $database->prepare(
+            "INSERT INTO plus_jobs (type,payload,state,available_at,attempts,max_attempts,created_at,updated_at) "
+            . "VALUES ('photo-gallery.rebuild','{}','queued',?,0,5,?,?)"
+        );
+        $insert->execute([$now, $now, $now]);
+    }
+});
+
 /** @return array{capture_metadata:bool,capture_time:bool} */
 function plus_media_capture_evidence(string $path, string $mime): array
 {
@@ -77,6 +99,84 @@ function plus_media_source_fingerprint(string $path): string
 {
     $hash = is_file($path) ? hash_file('sha256', $path) : false;
     return is_string($hash) ? $hash : '';
+}
+
+/**
+ * A deliberately conservative image-content fingerprint.
+ *
+ * Horizontal and vertical difference hashes survive ordinary JPEG/WebP
+ * recompression while retaining enough structure to avoid treating merely
+ * similar scenes as the same photograph. It is optional: installations
+ * without GD keep the exact byte fingerprint path.
+ */
+function plus_media_visual_fingerprint(string $path, string $mime): string
+{
+    if (!is_file($path) || !extension_loaded('gd')) return '';
+    $loader = match ($mime) {
+        'image/jpeg' => 'imagecreatefromjpeg',
+        'image/png' => 'imagecreatefrompng',
+        'image/webp' => 'imagecreatefromwebp',
+        'image/gif' => 'imagecreatefromgif',
+        'image/avif' => 'imagecreatefromavif',
+        default => '',
+    };
+    if ($loader === '' || !function_exists($loader)) return '';
+    try {
+        $source = @$loader($path);
+    } catch (Throwable) {
+        return '';
+    }
+    if (!$source instanceof GdImage) return '';
+    $sample = imagecreatetruecolor(17, 17);
+    if (!$sample instanceof GdImage) {
+        return '';
+    }
+    $white = imagecolorallocate($sample, 255, 255, 255);
+    imagefill($sample, 0, 0, $white);
+    $copied = imagecopyresampled(
+        $sample,
+        $source,
+        0,
+        0,
+        0,
+        0,
+        17,
+        17,
+        imagesx($source),
+        imagesy($source)
+    );
+    if (!$copied) {
+        return '';
+    }
+    $luminance = [];
+    for ($y = 0; $y < 17; $y++) {
+        for ($x = 0; $x < 17; $x++) {
+            $colour = imagecolorat($sample, $x, $y);
+            $red = ($colour >> 16) & 0xff;
+            $green = ($colour >> 8) & 0xff;
+            $blue = $colour & 0xff;
+            $luminance[$y][$x] = 299 * $red + 587 * $green + 114 * $blue;
+        }
+    }
+    $hex = '';
+    $nibble = 0;
+    $bits = 0;
+    $append = static function (bool $value) use (&$hex, &$nibble, &$bits): void {
+        $nibble = ($nibble << 1) | ($value ? 1 : 0);
+        $bits++;
+        if ($bits === 4) {
+            $hex .= dechex($nibble);
+            $nibble = 0;
+            $bits = 0;
+        }
+    };
+    for ($y = 0; $y < 16; $y++) {
+        for ($x = 0; $x < 16; $x++) $append($luminance[$y][$x] > $luminance[$y][$x + 1]);
+    }
+    for ($y = 0; $y < 16; $y++) {
+        for ($x = 0; $x < 16; $x++) $append($luminance[$y][$x] > $luminance[$y + 1][$x]);
+    }
+    return $hex;
 }
 
 /** @return array<string,string> */

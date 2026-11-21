@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "The personal photo gallery now includes image attachments from public and unlisted original statuses authored by the connected Social account. Immutable author IDs exclude foreign posts and boosts; private statuses, quoted media, and link previews remain outside the gallery. Blog and Social occurrences share deduplication, classification, and manual visibility overrides."
+    "instructions": "The personal photo gallery now recognizes conservatively matched recompressed copies as one asset, so the same photograph does not appear twice through Blog and Social sources. Existing galleries schedule one local rebuild after the update; posts and media files remain unchanged."
 }
