@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-const PERSONAL_PHOTO_GALLERY_RULE_VERSION = '1';
+const PERSONAL_PHOTO_GALLERY_RULE_VERSION = '2';
 
 function personal_photo_gallery_config(): array
 {
@@ -115,6 +115,21 @@ function personal_photo_gallery_enabled(?array $config = null): bool
     return plus_plugin_is_enabled('personal-photo-gallery', $config ?? personal_photo_gallery_config());
 }
 
+/** @return list<string> */
+function personal_photo_gallery_positive_tags(?array $config = null): array
+{
+    $saved = plus_plugin_settings('personal-photo-gallery', $config ?? personal_photo_gallery_config());
+    $raw = (string) ($saved['positive_tags'] ?? '');
+    $tags = [];
+    foreach (preg_split('/[,;\n]+/u', $raw) ?: [] as $tag) {
+        $tag = mb_strtolower(trim($tag));
+        if ($tag === '' || mb_strlen($tag) > 80) continue;
+        $tags[$tag] = true;
+        if (count($tags) >= 50) break;
+    }
+    return array_keys($tags);
+}
+
 function personal_photo_gallery_job_enabled(): bool
 {
     if (isset($GLOBALS['_pureblog_photo_gallery_config'])) {
@@ -223,11 +238,13 @@ function personal_photo_gallery_prepare_candidates(array $post): array
         $fingerprint = personal_photo_gallery_media_fingerprint($media);
         $assetKey = $fingerprint !== '' ? $fingerprint : (string) $media['id'];
         if (isset($prepared[$assetKey])) continue;
-        $context = implode("\n", array_filter([
-            (string) ($post['title'] ?? ''), (string) ($post['description'] ?? ''),
-            implode(', ', array_map('strval', (array) ($post['tags'] ?? []))),
-            $candidate['alt'], $candidate['caption'],
-        ]));
+        $context = implode("\n", [
+            'Title: ' . (string) ($post['title'] ?? ''),
+            'Description: ' . (string) ($post['description'] ?? ''),
+            'Tags: ' . implode(', ', array_map('strval', (array) ($post['tags'] ?? []))),
+            'Image alt: ' . $candidate['alt'],
+            'Image caption: ' . $candidate['caption'],
+        ]);
         $prepared[$assetKey] = [
             'candidate' => $candidate, 'media_id' => (string) $media['id'],
             'asset_key' => $assetKey, 'context' => mb_substr($context, 0, 2500),
@@ -273,7 +290,8 @@ function personal_photo_gallery_sync_post(
     string $slug,
     ?string $oldSlug = null,
     bool $invalidateCache = true,
-    ?array $post = null
+    ?array $post = null,
+    bool $classify = true
 ): int
 {
     $database = plus_database();
@@ -321,11 +339,42 @@ function personal_photo_gallery_sync_post(
     }
 
     try {
-        personal_photo_gallery_classify_assets(array_keys($assetKeys));
+        if ($classify) personal_photo_gallery_classify_assets(array_keys($assetKeys));
     } finally {
         if ($invalidateCache) cache_clear();
     }
     return count($assetKeys);
+}
+
+/**
+ * Queue one bounded classification job per projected asset.
+ *
+ * @param list<string> $assetKeys
+ */
+function personal_photo_gallery_schedule_classifications(array $assetKeys): int
+{
+    $pending = [];
+    $query = plus_database()->query(
+        "SELECT payload FROM plus_jobs WHERE type='photo-gallery.classify' AND state IN ('queued','running')"
+    );
+    foreach ($query->fetchAll(PDO::FETCH_COLUMN) as $payload) {
+        try {
+            $decoded = json_decode((string) $payload, true, 16, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            continue;
+        }
+        $assetKey = is_array($decoded) ? (string) ($decoded['asset_key'] ?? '') : '';
+        if ($assetKey !== '') $pending[$assetKey] = true;
+    }
+
+    $scheduled = 0;
+    foreach (array_values(array_unique($assetKeys)) as $assetKey) {
+        if (preg_match('/^[a-f0-9]{32,64}$/', $assetKey) !== 1 || isset($pending[$assetKey])) continue;
+        plus_enqueue_job('photo-gallery.classify', ['asset_key' => $assetKey], time(), 5);
+        $pending[$assetKey] = true;
+        $scheduled++;
+    }
+    return $scheduled;
 }
 
 /** @return array{id:string,version:string,handler:callable,settings:array<string,mixed>}|null */
@@ -344,6 +393,46 @@ function personal_photo_gallery_classifier(): ?array
     ];
 }
 
+/** @return array{visual_class:string,confidence:float,state:string,reason:string}|null */
+function personal_photo_gallery_local_decision(array $asset, ?array $config = null): ?array
+{
+    $imageText = mb_strtolower(implode(' ', [(string) $asset['alt_text'], (string) $asset['caption']]));
+    $explicitPatterns = [
+        'screenshot' => '/\b(?:screenshot|bildschirmfoto|bildschirmaufnahme)\b/u',
+        'illustration' => '/\b(?:illustration|infografik|zeichnung|comic|logo)\b/u',
+        'document' => '/\b(?:dokument|document|scan|eintrittskarte|fahrkarte|ticket)\b/u',
+        'flat_artwork' => '/\b(?:filmplakat|movie poster|poster|plakat|buchcover|book cover|buchumschlag|albumcover|album art|covermotiv)\b/u',
+    ];
+    foreach ($explicitPatterns as $visualClass => $pattern) {
+        if (preg_match($pattern, $imageText) === 1) {
+            return [
+                'visual_class' => $visualClass, 'confidence' => 0.99, 'state' => 'excluded',
+                'reason' => 'local_explicit_' . $visualClass . '_signal',
+            ];
+        }
+    }
+
+    if (!empty($asset['capture_metadata']) && !empty($asset['capture_time'])) {
+        return [
+            'visual_class' => 'camera_photo', 'confidence' => 0.99, 'state' => 'visible',
+            'reason' => 'camera_metadata_and_time',
+        ];
+    }
+
+    $context = mb_strtolower((string) $asset['context_text']);
+    $contextTags = [];
+    if (preg_match('/^tags:\s*(.*)$/miu', $context, $match) === 1) {
+        foreach (explode(',', $match[1]) as $tag) $contextTags[trim($tag)] = true;
+    }
+    if (array_intersect(personal_photo_gallery_positive_tags($config), array_keys($contextTags)) !== []) {
+        return [
+            'visual_class' => 'camera_photo', 'confidence' => 0.94, 'state' => 'visible',
+            'reason' => 'personal_photo_context',
+        ];
+    }
+    return null;
+}
+
 function personal_photo_gallery_classify(string $assetKey): array
 {
     $query = plus_database()->prepare(
@@ -356,6 +445,25 @@ function personal_photo_gallery_classify(string $assetKey): array
     $query->execute([$assetKey]);
     $asset = $query->fetch();
     if (!is_array($asset)) throw new InvalidArgumentException('Unknown gallery asset.');
+
+    $config = personal_photo_gallery_config();
+    $localDecision = personal_photo_gallery_local_decision($asset, $config);
+    if ($localDecision !== null) {
+        $inputSignature = hash('sha256', implode("\n", [
+            (string) $asset['asset_key'], (string) $asset['context_text'],
+            (string) $asset['capture_metadata'], (string) $asset['capture_time'],
+            PERSONAL_PHOTO_GALLERY_RULE_VERSION, 'local', implode(',', personal_photo_gallery_positive_tags($config)),
+        ]));
+        $existing = plus_database()->prepare('SELECT * FROM plus_photo_gallery_classifications WHERE asset_key=? AND input_signature=?');
+        $existing->execute([$assetKey, $inputSignature]);
+        $classification = $existing->fetch();
+        if (is_array($classification)) return $classification;
+        personal_photo_gallery_store_classification(
+            $assetKey, $localDecision['visual_class'], $localDecision['confidence'], $localDecision['state'],
+            $localDecision['reason'], 'local', PERSONAL_PHOTO_GALLERY_RULE_VERSION, $inputSignature
+        );
+        return personal_photo_gallery_classification($assetKey) ?? [];
+    }
 
     try {
         $classifier = personal_photo_gallery_classifier();
@@ -388,7 +496,7 @@ function personal_photo_gallery_classify(string $assetKey): array
     $state = 'unknown';
     $reason = 'insufficient_evidence';
     $riskText = mb_strtolower(implode(' ', [(string) $asset['alt_text'], (string) $asset['caption'], (string) $asset['post_title']]));
-    $artworkRisk = preg_match('/\b(?:filmplakat|movie poster|poster|buchcover|book cover|albumcover|album art|screenshot|bildschirmfoto|logo|illustration|eintrittskarte|ticket)\b/u', $riskText) === 1;
+    $artworkRisk = preg_match('/\b(?:filmplakat|movie poster|poster|plakat|buchcover|book cover|buchumschlag|albumcover|album art|covermotiv|screenshot|bildschirmfoto|bildschirmaufnahme|logo|illustration|infografik|zeichnung|dokument|document|scan|eintrittskarte|fahrkarte|ticket)\b/u', $riskText) === 1;
 
     if ($classifier === null) {
         if ($artworkRisk) {
@@ -459,18 +567,13 @@ function personal_photo_gallery_classification(string $assetKey): ?array
 function personal_photo_gallery_rebuild(): int
 {
     $count = 0;
-    $rebuildError = null;
     try {
         foreach (get_all_posts(true, true) as $post) {
             if (!personal_photo_gallery_job_enabled()) return $count;
             if (($post['status'] ?? '') !== 'published') continue;
             $slug = (string) ($post['slug'] ?? '');
             if ($slug === '') continue;
-            try {
-                $count += personal_photo_gallery_sync_post($slug, null, false, $post);
-            } catch (Throwable $error) {
-                $rebuildError ??= $error;
-            }
+            $count += personal_photo_gallery_sync_post($slug, null, false, $post, false);
             plus_job_heartbeat();
         }
         if (!personal_photo_gallery_job_enabled()) return $count;
@@ -485,14 +588,10 @@ function personal_photo_gallery_rebuild(): int
         foreach ($database->query('SELECT DISTINCT post_slug FROM plus_photo_gallery_occurrences')->fetchAll(PDO::FETCH_COLUMN) as $projectedSlug) {
             if (!isset($publishedLookup[(string) $projectedSlug])) $staleSlugs[] = (string) $projectedSlug;
         }
-        $affectedAssets = [];
         plus_begin_immediate($database);
         try {
             $delete = $database->prepare('DELETE FROM plus_photo_gallery_occurrences WHERE post_slug=?');
-            $selectAssets = $database->prepare('SELECT asset_key FROM plus_photo_gallery_occurrences WHERE post_slug=?');
             foreach ($staleSlugs as $staleSlug) {
-                $selectAssets->execute([$staleSlug]);
-                foreach ($selectAssets->fetchAll(PDO::FETCH_COLUMN) as $assetKey) $affectedAssets[] = (string) $assetKey;
                 $delete->execute([$staleSlug]);
             }
             personal_photo_gallery_prune_orphan_assets($database);
@@ -501,12 +600,14 @@ function personal_photo_gallery_rebuild(): int
             if ($database->inTransaction()) $database->exec('ROLLBACK');
             throw $error;
         }
-        try {
-            personal_photo_gallery_classify_assets($affectedAssets);
-        } catch (Throwable $error) {
-            $rebuildError ??= $error;
-        }
-        if ($rebuildError !== null) throw $rebuildError;
+        $assetKeys = array_map(
+            'strval',
+            $database->query(
+                "SELECT DISTINCT o.asset_key FROM plus_photo_gallery_occurrences o "
+                . "JOIN plus_media m ON m.id=o.media_id AND m.delete_state='active' ORDER BY o.asset_key"
+            )->fetchAll(PDO::FETCH_COLUMN)
+        );
+        personal_photo_gallery_schedule_classifications($assetKeys);
         return $count;
     } finally {
         cache_clear();
@@ -547,7 +648,8 @@ function personal_photo_gallery_event_configuration_saved(array $config, array $
     $previousProvider = (string) ($previous['plugins']['providers']['media.photo_classification'] ?? '');
     $settings = (array) ($config['plugins']['settings'][$provider] ?? []);
     $previousSettings = (array) ($previous['plugins']['settings'][$previousProvider] ?? []);
-    if ($provider !== $previousProvider || $settings !== $previousSettings) {
+    if ($provider !== $previousProvider || $settings !== $previousSettings
+        || personal_photo_gallery_positive_tags($config) !== personal_photo_gallery_positive_tags($previous)) {
         personal_photo_gallery_schedule_rebuild();
     }
 }
@@ -564,6 +666,21 @@ function personal_photo_gallery_rebuild_job(array $payload): void
 {
     if (!personal_photo_gallery_job_enabled()) return;
     personal_photo_gallery_rebuild();
+}
+
+/** @param array<string,mixed> $payload */
+function personal_photo_gallery_classify_job(array $payload): void
+{
+    if (!personal_photo_gallery_job_enabled()) return;
+    $assetKey = (string) ($payload['asset_key'] ?? '');
+    if (preg_match('/^[a-f0-9]{32,64}$/', $assetKey) !== 1) {
+        throw new InvalidArgumentException('Invalid gallery asset.');
+    }
+    try {
+        personal_photo_gallery_classify_assets([$assetKey]);
+    } finally {
+        cache_clear();
+    }
 }
 
 function personal_photo_gallery_cursor_encode(array $item): string
@@ -798,4 +915,5 @@ function personal_photo_gallery_stats(): array
 
 plus_register_job_handler('photo-gallery.sync', 'personal_photo_gallery_sync_job');
 plus_register_job_handler('photo-gallery.rebuild', 'personal_photo_gallery_rebuild_job');
+plus_register_job_handler('photo-gallery.classify', 'personal_photo_gallery_classify_job');
 plus_register_capability('photo.gallery', 1, 0);

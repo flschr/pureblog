@@ -93,6 +93,7 @@ function pureblog_plus_protected_release_files(): array
 {
     return [
         'LICENSE.md',
+        'bin/plus-jobs.php',
         'includes/plus/runtime.php',
         'includes/plus/migrations.php',
         'includes/plus/jobs.php',
@@ -120,6 +121,7 @@ function pureblog_plus_protected_release_files(): array
         'webmention/index.php',
         'admin/webmentions.php',
         'admin/gallery.php',
+        'admin/images.php',
         'admin/settings-plugins.php',
         'admin/settings-social.php',
         'admin/social-callback.php',

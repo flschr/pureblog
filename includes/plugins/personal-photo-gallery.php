@@ -8,7 +8,7 @@ plus_register_plugin([
     'name_key' => 'admin.settings.plugins.bundled.photo_gallery.name',
     'description' => 'Builds a fast public gallery from likely author-captured photos in published posts.',
     'description_key' => 'admin.settings.plugins.bundled.photo_gallery.description',
-    'version' => '1.0.0',
+    'version' => '1.0.1',
     'api_version' => PUREBLOG_PLUGIN_API_VERSION,
     'capabilities' => [
         'site.route' => 'personal_photo_gallery_route_handler',
@@ -39,6 +39,10 @@ plus_register_plugin([
             'type' => 'select', 'label' => 'Photos per page',
             'label_key' => 'admin.settings.plugins.bundled.photo_gallery.page_size', 'default' => '24',
             'options' => ['24' => '24', '36' => '36'],
+        ],
+        'positive_tags' => [
+            'type' => 'text', 'label' => 'Personal-photo tags',
+            'label_key' => 'admin.settings.plugins.bundled.photo_gallery.positive_tags', 'default' => '',
         ],
     ],
 ]);

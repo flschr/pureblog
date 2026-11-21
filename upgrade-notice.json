@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "This release adds the optional personal photo gallery. It stays disabled until explicitly enabled; activation queues a background rebuild, and uncertain images remain hidden for review."
+    "instructions": "Photo gallery rebuilds now project the full inventory first and classify it through bounded resumable jobs. Explicit non-photo signals and configured personal-photo context tags are handled locally; only ambiguous images use the selected provider."
 }

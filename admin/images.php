@@ -56,7 +56,7 @@ foreach (plus_media_list() as $media) {
         'slug' => 'media', 'filename' => $filename, 'url' => (string) $media['url'],
         'markdown' => '![' . plus_markdown_alt($altText) . '](' . $media['url'] . ')',
         'mtime' => (int) $media['created_at'], 'managed_media' => true, 'media_id' => (string) $media['id'],
-        'default_alt' => $defaultAlt,
+        'default_alt' => $defaultAlt, 'deletable' => plus_media_can_delete($media),
     ];
 }
 
@@ -260,12 +260,14 @@ require __DIR__ . '/../includes/admin-head.php';
 
                             <?php if (!empty($image['managed_media']) && !empty($image['referenced_in'])): ?>
                                 <span class="tip"><?= e(plus_media_by_url($image['url'])['provider_id'] ?? '') ?> · <?= e(t('admin.images.used_in_count', ['count' => count($image['referenced_in'])])) ?></span>
-                            <?php elseif (!empty($image['managed_media'])): ?>
+                            <?php elseif (!empty($image['managed_media']) && !empty($image['deletable'])): ?>
                                 <form method="post" action="<?= base_path() ?>/admin/delete-media.php" class="inline-form" onsubmit="return confirm('<?= e(t('admin.images.delete_confirm')) ?>')">
                                     <input type="hidden" name="id" value="<?= e($image['media_id']) ?>">
                                     <?= csrf_field() ?>
                                     <button type="submit" class="link-button delete"><svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg> <?= e(t('admin.editor.delete')) ?></button>
                                 </form>
+                            <?php elseif (!empty($image['managed_media'])): ?>
+                                <span class="tip"><?= e(t('admin.images.read_only')) ?></span>
                             <?php elseif (!empty($image['referenced_in'])): ?>
                                 <button type="button" class="link-button delete" onclick="document.getElementById('<?= e($dialogId) ?>').showModal()">
                                     <svg class="icon" aria-hidden="true"><use href="#icon-circle-x"></use></svg>
