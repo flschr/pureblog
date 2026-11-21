@@ -106,6 +106,10 @@ updater_test_assert(pureblog_plus_update_available('3.9.2-plus.0', 'v3.9.2-plus.
 updater_test_assert(!pureblog_plus_update_available('3.9.2', 'v3.9.2-plus.1'), 'Non-Plus installation accepted for automatic update.');
 updater_test_assert(pureblog_plus_release_download_url_is_allowed('https://api.github.com/repos/flschr/pureblog/zipball/v3.9.2-plus.1'), 'Expected GitHub download URL rejected.');
 updater_test_assert(!pureblog_plus_release_download_url_is_allowed('https://api.github.com/repos/kevquirk/pureblog/zipball/v3.9.2'), 'Upstream download URL accepted.');
+$protectedReleaseFiles = pureblog_plus_protected_release_files();
+foreach (['includes/plus/photo-gallery.php', 'includes/plugins/personal-photo-gallery.php', 'admin/gallery.php'] as $galleryReleaseFile) {
+    updater_test_assert(in_array($galleryReleaseFile, $protectedReleaseFiles, true), 'Gallery release file is not protected: ' . $galleryReleaseFile);
+}
 
 $releasePayload = json_encode([
     ['tag_name' => 'v3.9.2-plus.1', 'name' => 'Stable', 'html_url' => 'https://github.com/flschr/pureblog/releases/tag/v3.9.2-plus.1', 'zipball_url' => 'https://api.github.com/repos/flschr/pureblog/zipball/v3.9.2-plus.1', 'published_at' => '2026-11-15T00:00:00Z', 'draft' => false, 'prerelease' => false],
@@ -140,6 +144,11 @@ try {
     file_put_contents($releaseRoot . '/includes/plus/jobs.php', $originalJobs . "\n");
     updater_test_assert(!validate_pureblog_plus_package($releaseRoot, 'v3.9.2-plus.1')['ok'], 'Tampered protected file accepted.');
     file_put_contents($releaseRoot . '/includes/plus/jobs.php', $originalJobs);
+
+    $originalGallery = file_get_contents($releaseRoot . '/includes/plus/photo-gallery.php');
+    file_put_contents($releaseRoot . '/includes/plus/photo-gallery.php', $originalGallery . "\n");
+    updater_test_assert(!validate_pureblog_plus_package($releaseRoot, 'v3.9.2-plus.1')['ok'], 'Tampered gallery runtime accepted.');
+    file_put_contents($releaseRoot . '/includes/plus/photo-gallery.php', $originalGallery);
 
     updater_test_zip_tree($releaseRoot, $zipPath, 'flschr-pureblog-release');
     $download = static fn(string $url, string $destination): ?string => copy($zipPath, $destination) ? null : 'Fixture copy failed.';
