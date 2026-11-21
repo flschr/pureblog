@@ -186,6 +186,14 @@ try {
     test_assert($missingRun === ['claimed' => 1, 'succeeded' => 0, 'failed' => 1], 'Missing handler was not isolated.');
     test_assert(plus_get_job((int) $missing['id'])['state'] === 'failed', 'Missing handler job did not stop after its final attempt.');
 
+    plus_register_job_handler('test.budget', static function (): void { usleep(1100000); });
+    plus_enqueue_job('test.budget', [], time(), 1);
+    plus_enqueue_job('test.budget', [], time(), 1);
+    $budgetedRun = plus_run_due_jobs('runner-budget', 5, 300, 1);
+    test_assert($budgetedRun === ['claimed' => 1, 'succeeded' => 1, 'failed' => 0], 'Job runner ignored its bounded service time budget.');
+    $remainingBudgetedRun = plus_run_due_jobs('runner-budget-rest', 5);
+    test_assert($remainingBudgetedRun === ['claimed' => 1, 'succeeded' => 1, 'failed' => 0], 'A time-budgeted job run lost remaining queued work.');
+
     $oldSucceeded = plus_enqueue_job('test.old-succeeded', [], 1000, 1);
     $oldClaim = plus_claim_job('old-worker', 30, 1000);
     test_assert($oldClaim !== null && $oldClaim['id'] === $oldSucceeded['id'], 'Old succeeded job was not claimed.');

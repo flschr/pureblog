@@ -204,6 +204,22 @@ try {
         'api_version' => PUREBLOG_PLUGIN_API_VERSION,
         'capabilities' => ['media.delete' => $GLOBALS['_pureblog_test_delete_handler']], 'settings' => [],
     ]);
+    $readOnlyId = bin2hex(random_bytes(16));
+    plus_database()->prepare(
+        'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,variants_json,provider_data_json,local_source,created_at) '
+        . 'VALUES (?,?,?,?,?,?,?,?,?)'
+    )->execute([$readOnlyId, 'test-delete', 'https://media.example.test/archive.jpg', 'image/jpeg', 'archive.jpg', '{}', '{"read_only":true}', '', time()]);
+    $readOnlyMedia = plus_media_by_id($readOnlyId);
+    plugin_media_assert(is_array($readOnlyMedia) && !plus_media_can_delete($readOnlyMedia), 'Read-only media was exposed as deletable.');
+    try {
+        plus_delete_media($readOnlyId);
+        throw new RuntimeException('Read-only media deletion was accepted.');
+    } catch (RuntimeException $error) {
+        plugin_media_assert(str_contains($error->getMessage(), 'Read-only'), 'Read-only media returned the wrong deletion error.');
+    }
+    plugin_media_assert(plus_media_by_id($readOnlyId)['delete_state'] === 'active' && $deleteAttempts === 0,
+        'A read-only deletion attempt mutated media state or reached its provider.');
+    plus_database()->prepare('DELETE FROM plus_media WHERE id=?')->execute([$readOnlyId]);
     $retrySource = $root . '/retry-source.jpg';
     file_put_contents($retrySource, 'retry');
     $retryId = bin2hex(random_bytes(16));

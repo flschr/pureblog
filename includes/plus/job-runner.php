@@ -24,14 +24,27 @@ function plus_job_heartbeat(): void
     if (is_callable($heartbeat)) $heartbeat();
 }
 
-function plus_run_due_jobs(string $workerId, int $limit = 10, int $leaseSeconds = 300): array
+function plus_run_due_jobs(
+    string $workerId,
+    int $limit = 10,
+    int $leaseSeconds = 300,
+    ?int $timeBudgetSeconds = null
+): array
 {
     if ($limit < 1 || $limit > 1000) {
         throw new InvalidArgumentException('Plus job limit must be between 1 and 1000.');
     }
+    if ($timeBudgetSeconds !== null && ($timeBudgetSeconds < 1 || $timeBudgetSeconds > 3600)) {
+        throw new InvalidArgumentException('Plus job time budget must be between 1 and 3600 seconds.');
+    }
 
     $result = ['claimed' => 0, 'succeeded' => 0, 'failed' => 0];
+    $startedAt = microtime(true);
     while ($result['claimed'] < $limit) {
+        if ($result['claimed'] > 0 && $timeBudgetSeconds !== null
+            && microtime(true) - $startedAt >= $timeBudgetSeconds) {
+            break;
+        }
         $job = plus_claim_job($workerId, $leaseSeconds);
         if ($job === null) {
             break;

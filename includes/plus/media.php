@@ -400,10 +400,30 @@ function plus_media_is_referenced(string $url, ?array $directories = null): bool
     return false;
 }
 
+function plus_media_is_read_only(array $media): bool
+{
+    $providerData = $media['provider_data'] ?? null;
+    if (!is_array($providerData)) {
+        $decoded = json_decode((string) ($media['provider_data_json'] ?? ''), true);
+        $providerData = is_array($decoded) ? $decoded : [];
+    }
+    return !empty($providerData['read_only']);
+}
+
+function plus_media_can_delete(array $media): bool
+{
+    if (plus_media_is_read_only($media)) return false;
+    $plugin = plus_plugins()[(string) ($media['provider_id'] ?? '')] ?? null;
+    return is_callable($plugin['capabilities']['media.delete'] ?? null);
+}
+
 function plus_delete_media(string $id): bool
 {
     $media = plus_media_by_id($id);
     if ($media === null) return false;
+    if (plus_media_is_read_only($media)) {
+        throw new RuntimeException('Read-only media cannot be deleted.');
+    }
     if (plus_media_is_referenced((string) $media['url'])
         || (function_exists('social_media_is_referenced') && social_media_is_referenced((string) $media['url']))) {
         throw new RuntimeException('Referenced media cannot be deleted.');

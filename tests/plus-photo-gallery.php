@@ -85,6 +85,7 @@ try {
     $config = default_config();
     $config['plugins']['enabled'] = ['local-media', 'personal-photo-gallery', 'test-photo-classifier'];
     $config['plugins']['providers']['media.photo_classification'] = 'test-photo-classifier';
+    $config['plugins']['settings']['personal-photo-gallery']['positive_tags'] = 'fotografie, wandern';
     $GLOBALS['_pureblog_photo_gallery_config'] = $config;
     photo_gallery_assert(personal_photo_gallery_enabled($config), 'Enabled gallery was not recognized.');
     photo_gallery_assert(plus_public_route_matches('/gallery', $config)
@@ -163,6 +164,36 @@ try {
     }
     $occurrenceInsert->execute(['older-camera-post', $keys['camera'], $ids['camera'], 0, 'Older occurrence', '', 'Older lake post', '2026-10-01 10:00:00', 'Older lake post']);
 
+    $taggedId = hash('md5', 'media-tagged-camera');
+    $taggedKey = hash('sha256', 'asset-tagged-camera');
+    $mediaInsert->execute([$taggedId, 'local-media', 'https://media.example.test/tagged-camera.jpg', 'image/jpeg', 'tagged-camera.jpg', 1200, 800, '{}', '{}', '/private/tagged-camera.jpg', time(), 0, 0, $taggedKey]);
+    $assetInsert->execute([$taggedKey]);
+    $occurrenceInsert->execute(['tagged-camera-post', $taggedKey, $taggedId, 0, 'Mountain at sunrise', '', 'Walking', '2026-10-02 10:00:00', "Title: Walking\nDescription: Morning\nTags: fotografie, wandern\nImage alt: Mountain at sunrise\nImage caption: "]);
+    $classes[$taggedId] = null;
+    $taggedClassification = personal_photo_gallery_classify($taggedKey);
+    photo_gallery_assert(($taggedClassification['automatic_state'] ?? '') === 'visible'
+        && ($taggedClassification['reason'] ?? '') === 'personal_photo_context',
+        'Strong personal-photo context did not avoid unnecessary external classification.');
+    $database->prepare('DELETE FROM plus_photo_gallery_assets WHERE asset_key=?')->execute([$taggedKey]);
+    $database->prepare('DELETE FROM plus_media WHERE id=?')->execute([$taggedId]);
+    unset($classes[$taggedId]);
+
+    $scheduled = personal_photo_gallery_schedule_classifications([$keys['camera'], $keys['cover'], $keys['camera'], 'invalid']);
+    photo_gallery_assert($scheduled === 2
+        && (int) $database->query("SELECT COUNT(*) FROM plus_jobs WHERE type='photo-gallery.classify' AND state='queued'")->fetchColumn() === 2,
+        'A large gallery rebuild did not split classification into bounded per-asset jobs.');
+    photo_gallery_assert(personal_photo_gallery_schedule_classifications([$keys['camera'], $keys['cover']]) === 0,
+        'A repeated rebuild duplicated pending gallery classification work.');
+    $database->exec("DELETE FROM plus_jobs WHERE type='photo-gallery.classify'");
+    personal_photo_gallery_classify_job(['asset_key' => $keys['camera']]);
+    photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'visible',
+        'The bounded gallery classification job did not publish its result.');
+    try {
+        personal_photo_gallery_classify_job(['asset_key' => 'invalid']);
+        throw new RuntimeException('Invalid classification payload was accepted.');
+    } catch (InvalidArgumentException) {
+    }
+
     foreach (['camera', 'cover', 'unknown', 'physical', 'risky-camera'] as $name) personal_photo_gallery_classify($keys[$name]);
     try {
         personal_photo_gallery_classify($keys['outage']);
@@ -174,8 +205,9 @@ try {
     photo_gallery_assert(($failedClassification['automatic_state'] ?? '') === 'unknown'
         && str_starts_with((string) ($failedClassification['reason'] ?? ''), 'provider_error:'), 'Provider failure was not stored conservatively.');
     $riskyClassification = personal_photo_gallery_classification($keys['risky-camera']);
-    photo_gallery_assert(($riskyClassification['automatic_state'] ?? '') === 'unknown'
-        && str_starts_with((string) ($riskyClassification['reason'] ?? ''), 'conflicting_artwork_context:'), 'Conflicting cover context did not fail closed.');
+    photo_gallery_assert(($riskyClassification['automatic_state'] ?? '') === 'excluded'
+        && ($riskyClassification['reason'] ?? '') === 'local_explicit_flat_artwork_signal',
+        'An explicit cover description was not excluded before external classification.');
 
     $reconfigured = $config;
     $reconfigured['plugins']['settings']['test-photo-classifier']['revision'] = '2';
@@ -201,7 +233,7 @@ try {
     personal_photo_gallery_classify($keys['camera']);
     $occurrenceInsert->execute(['stale-camera-post', $keys['camera'], $ids['camera'], 0, 'Book cover', '', 'Book cover', '2026-12-01 10:00:00', 'Book cover']);
     personal_photo_gallery_classify($keys['camera']);
-    photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'unknown', 'Latest duplicate context did not control classification.');
+    photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'excluded', 'Latest duplicate context did not control classification.');
     $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE post_slug='stale-camera-post'")->execute();
     personal_photo_gallery_classify_assets([$keys['camera']]);
     photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'visible', 'Removing the latest occurrence left a stale classification from its context.');
@@ -245,14 +277,14 @@ try {
     $database->prepare('UPDATE plus_photo_gallery_occurrences SET context_text=? WHERE asset_key=?')->execute(['Changed context', $keys['camera']]);
     personal_photo_gallery_classify($keys['camera']);
     photo_gallery_assert(count(personal_photo_gallery_admin_items('hidden')) === 1, 'Manual hide did not survive reclassification.');
-    photo_gallery_assert(count(personal_photo_gallery_admin_items('excluded')) === 0, 'Manually shown cover remained in the excluded filter.');
-    photo_gallery_assert(count(personal_photo_gallery_admin_items('unknown')) === 3, 'Unknown filter does not include conservative, conflicting, or failed classifications.');
+    photo_gallery_assert(count(personal_photo_gallery_admin_items('excluded')) === 1, 'Explicitly excluded artwork disappeared with an unrelated manual show override.');
+    photo_gallery_assert(count(personal_photo_gallery_admin_items('unknown')) === 2, 'Unknown filter does not include uncertain and failed classifications.');
 
     personal_photo_gallery_set_visibility($keys['camera'], null);
     personal_photo_gallery_set_visibility($keys['cover'], null);
     photo_gallery_assert(!in_array($keys['cover'], array_column(personal_photo_gallery_page_items(null, 24)['items'], 'asset_key'), true), 'Automatic cover exclusion was not restored.');
     $stats = personal_photo_gallery_stats();
-    photo_gallery_assert($stats === ['visible' => 2, 'hidden' => 0, 'excluded' => 1, 'unknown' => 3], 'Gallery statistics are inconsistent.');
+    photo_gallery_assert($stats === ['visible' => 2, 'hidden' => 0, 'excluded' => 2, 'unknown' => 2], 'Gallery statistics are inconsistent.');
 
     $orphanKey = hash('sha256', 'temporarily-orphaned-asset');
     $assetInsert->execute([$orphanKey]);
