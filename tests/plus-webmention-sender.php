@@ -48,13 +48,15 @@ try {
         'status' => 'published',
         'content' => '[External](https://target.example/article#part) [Local](/demo)',
         'micropub_in_reply_to' => json_encode(['https://reply.example/original'], JSON_THROW_ON_ERROR),
+        'micropub_bookmark_of' => json_encode(['https://bookmark.example/article'], JSON_THROW_ON_ERROR),
     ];
     $relationships = render_post_relationships($post);
     sender_test_assert(str_contains($relationships, 'class="u-in-reply-to"'), 'Micropub reply relationship was not rendered.');
+    sender_test_assert(str_contains($relationships, 'class="u-bookmark-of"'), 'Micropub bookmark relationship was not rendered.');
     sender_test_assert(str_contains($relationships, 'https://reply.example/original'), 'Micropub reply target was not rendered.');
     $targets = webmention_sender_extract_targets('post', $post, 'http://localhost/source');
     sort($targets);
-    sender_test_assert($targets === ['https://reply.example/original', 'https://target.example/article#part'], 'Published external targets were not extracted correctly.');
+    sender_test_assert($targets === ['https://bookmark.example/article', 'https://reply.example/original', 'https://target.example/article#part'], 'Published external targets were not extracted correctly.');
 
     $headerResponse = static fn(string $url, string $method, array $form, int $limit): array => [
         'ok' => true,

@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Photo gallery rebuilds now project the full inventory first and classify it through bounded resumable jobs. Explicit non-photo signals and configured personal-photo context tags are handled locally; only ambiguous images use the selected provider."
+    "instructions": "Micropub clients can now list posts and drafts, discover categories and supported post types, and preserve bookmarks and RSVPs. Media uploads accept both standard create tokens and dedicated media tokens."
 }

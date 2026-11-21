@@ -14,17 +14,31 @@ try {
         micropub_require_token();
         $query = (string) ($_GET['q'] ?? '');
         if ($query === 'config') {
-            micropub_send_json(['media-endpoint' => micropub_media_endpoint_url(), 'syndicate-to' => social_syndication_targets()]);
+            micropub_send_json(micropub_config());
         }
         if ($query === 'syndicate-to') {
             micropub_send_json(['syndicate-to' => social_syndication_targets()]);
         }
         if ($query === 'source') {
             micropub_require_token('update');
-            $post = micropub_post_from_url((string) ($_GET['url'] ?? ''));
+            $url = trim((string) ($_GET['url'] ?? ''));
+            if ($url === '') {
+                [$limit, $offset] = micropub_query_window($_GET['limit'] ?? null, $_GET['offset'] ?? null);
+                micropub_send_json(micropub_source_list($limit, $offset));
+            }
+            $post = micropub_post_from_url($url);
             $requested = $_GET['properties'] ?? [];
             $requested = is_array($requested) ? array_values(array_filter($requested, 'is_string')) : [(string) $requested];
             micropub_send_json(micropub_source($post, $requested));
+        }
+        if ($query === 'category') {
+            micropub_require_any_scope(['create', 'update']);
+            [$limit, $offset] = micropub_query_window($_GET['limit'] ?? null, $_GET['offset'] ?? null, 100);
+            $filter = $_GET['filter'] ?? '';
+            if (is_array($filter)) {
+                throw new MicropubProtocolException('invalid_request', 'The filter value must be a string.');
+            }
+            micropub_send_json(['categories' => micropub_categories(trim((string) $filter), $limit, $offset)]);
         }
         throw new MicropubProtocolException('invalid_request', 'The query is not supported.');
     }
