@@ -31,6 +31,14 @@ try {
         $legacyDatabase->query('SELECT announcement_template FROM plus_social_connection WHERE id=1')->fetchColumn() === '',
         'Existing social settings did not inherit the default announcement template during migration.'
     );
+    $authorshipDatabase = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $authorshipDatabase->exec("CREATE TABLE plus_social_archives (id INTEGER PRIMARY KEY,account_id TEXT NOT NULL);INSERT INTO plus_social_archives VALUES (7,'account-7')");
+    $authorshipDatabase->exec("CREATE TABLE plus_social_statuses (archive_id INTEGER NOT NULL,remote_id TEXT NOT NULL,PRIMARY KEY(archive_id,remote_id));INSERT INTO plus_social_statuses VALUES (7,'status-7')");
+    ($GLOBALS['_pureblog_plus_migrations']['0014_social_status_authorship'])($authorshipDatabase);
+    social_test_assert(
+        $authorshipDatabase->query("SELECT author_id FROM plus_social_statuses WHERE remote_id='status-7'")->fetchColumn() === 'account-7',
+        'Existing account-scoped statuses did not inherit their canonical archive author.'
+    );
     $GLOBALS['_pureblog_social_public_ips'] = static fn(string $host): array => ['203.0.113.10'];
     $GLOBALS['_pureblog_social_media_archiver'] = static function (string $url): string {
         if (str_contains($url, 'broken')) throw new RuntimeException('Synthetic archive failure.');
@@ -51,19 +59,32 @@ try {
         } elseif (str_contains($url, '/api/v1/accounts/account-1/statuses')) {
             $payload = $statusGeneration === 1 ? [[
                 'id' => '102', 'uri' => 'tag:example,102', 'url' => 'https://example.social/@rene/102',
+                'account' => ['id' => 'account-1'],
                 'content' => '<p>First<br>status</p>', 'spoiler_text' => '', 'visibility' => 'public',
                 'created_at' => '2026-11-15T10:00:00Z', 'edited_at' => null,
                 'media_attachments' => [['type' => 'image', 'url' => 'https://media.example/one.jpg', 'description' => 'One']],
             ], [
                 'id' => '101', 'uri' => 'tag:example,101', 'url' => 'https://example.social/@rene/101',
+                'account' => ['id' => 'account-1'],
                 'content' => '<p>Broken image survives</p>', 'spoiler_text' => '', 'visibility' => 'unlisted',
                 'created_at' => '2026-11-15T09:00:00Z', 'edited_at' => null,
                 'media_attachments' => [['type' => 'image', 'url' => 'https://media.example/broken.jpg', 'description' => 'Broken']],
             ], [
                 'id' => '100', 'url' => 'https://example.social/@rene/100', 'content' => 'Private',
+                'account' => ['id' => 'account-1'],
                 'visibility' => 'private', 'created_at' => '2026-11-15T08:00:00Z', 'media_attachments' => [],
+            ], [
+                'id' => '099', 'url' => 'https://example.social/@other/099', 'content' => 'Foreign',
+                'account' => ['id' => 'account-2'], 'visibility' => 'public', 'created_at' => '2026-11-15T07:00:00Z',
+                'media_attachments' => [['type' => 'image', 'url' => 'https://media.example/foreign.jpg', 'description' => 'Foreign']],
+            ], [
+                'id' => '098', 'url' => 'https://example.social/@rene/098', 'content' => 'Boost',
+                'account' => ['id' => 'account-1'], 'reblog' => ['id' => 'foreign-original'], 'visibility' => 'public',
+                'created_at' => '2026-11-15T06:00:00Z',
+                'media_attachments' => [['type' => 'image', 'url' => 'https://media.example/boost.jpg', 'description' => 'Boost']],
             ]] : [[
                 'id' => '102', 'uri' => 'tag:example,102', 'url' => 'https://example.social/@rene/102',
+                'account' => ['id' => 'account-1'],
                 'content' => '<p>Edited status</p>', 'spoiler_text' => '', 'visibility' => 'public',
                 'created_at' => '2026-11-15T10:00:00Z', 'edited_at' => '2026-11-15T11:00:00Z', 'media_attachments' => [],
             ]];
@@ -113,6 +134,7 @@ try {
     social_test_assert(social_sync(1000) === 2, 'Initial status synchronization count is wrong.');
     $statuses = social_statuses();
     social_test_assert(count($statuses) === 2, 'Public projection contains the wrong statuses.');
+    social_test_assert(array_unique(array_column($statuses, 'author_id')) === ['account-1'], 'A foreign or unattributed status entered the personal archive.');
     social_test_assert($statuses[0]['content_text'] === "First\nstatus", 'Remote HTML was not reduced to safe text.');
     social_test_assert(str_contains($statuses[0]['media_json'], 'blog.example/content/media/social'), 'Archived media URL was not retained.');
     $archivedMedia = json_decode((string) $statuses[0]['media_json'], true);

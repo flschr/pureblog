@@ -29,6 +29,12 @@ selected Pure Blog media provider, so the public projection does not depend on r
 URLs. A failed image copy does not discard its status. Copied media that is no longer referenced
 after a successful reconciliation is removed through the normal retryable media-deletion path.
 
+When the personal photo gallery is enabled, image attachments from these verified original
+statuses become gallery candidates. The stored status author ID must exactly match the immutable
+account ID of its archive, so boosts, quoted foreign media, link cards, and statuses from another
+author cannot enter the gallery. The normal photo classifier still excludes covers, posters,
+screenshots, and other non-photographic images; existing manual gallery overrides remain authoritative.
+
 Enable the public projection to make it available at `/social`. Navigation remains under the
 site owner's control through the normal navigation settings. Disconnecting stops polling but
 keeps the projection and its copied media frozen until the same or another account is

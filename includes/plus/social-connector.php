@@ -113,6 +113,17 @@ plus_register_migration('0011_social_announcement_template', static function (PD
     $database->exec('ALTER TABLE plus_social_connection ADD COLUMN announcement_template TEXT NOT NULL DEFAULT \'\'');
 });
 
+plus_register_migration('0014_social_status_authorship', static function (PDO $database): void {
+    $columns = array_column($database->query('PRAGMA table_info(plus_social_statuses)')->fetchAll(), 'name');
+    if (!in_array('author_id', $columns, true)) {
+        $database->exec("ALTER TABLE plus_social_statuses ADD COLUMN author_id TEXT NOT NULL DEFAULT ''");
+    }
+    $database->exec(
+        "UPDATE plus_social_statuses SET author_id=COALESCE((SELECT a.account_id FROM plus_social_archives a "
+        . "WHERE a.id=plus_social_statuses.archive_id),'') WHERE author_id=''"
+    );
+});
+
 function social_default_announcement_template(): string
 {
     return "{title}\n\n{url}";
@@ -586,6 +597,9 @@ function social_sync_locked(?int $now = null): int
             $remoteId = trim((string) ($status['id'] ?? ''));
             if ($remoteId === '') continue;
             $maxId = $remoteId;
+            $authorId = trim((string) ($status['account']['id'] ?? ''));
+            if ($authorId === '' || !hash_equals((string) $connection['account_id'], $authorId)
+                || !empty($status['reblog'])) continue;
             if (!in_array((string) ($status['visibility'] ?? ''), ['public', 'unlisted'], true)) continue;
             $announcement = plus_database()->prepare('SELECT 1 FROM plus_social_announcements WHERE archive_id=? AND remote_id=?');
             $announcement->execute([$archiveId, $remoteId]);
@@ -595,14 +609,15 @@ function social_sync_locked(?int $now = null): int
             $statusUrl = social_https_url((string) ($status['url'] ?? ''));
             if ($statusUrl === '') continue;
             plus_database()->prepare(
-                'INSERT INTO plus_social_statuses (archive_id,remote_id,uri,url,content_text,spoiler_text,visibility,media_json,published_at,edited_at,updated_at) '
-                . 'VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(archive_id,remote_id) DO UPDATE SET uri=excluded.uri,url=excluded.url,'
+                'INSERT INTO plus_social_statuses (archive_id,remote_id,uri,url,content_text,spoiler_text,visibility,media_json,published_at,edited_at,updated_at,author_id) '
+                . 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(archive_id,remote_id) DO UPDATE SET uri=excluded.uri,url=excluded.url,'
                 . 'content_text=excluded.content_text,spoiler_text=excluded.spoiler_text,visibility=excluded.visibility,'
-                . 'media_json=excluded.media_json,published_at=excluded.published_at,edited_at=excluded.edited_at,updated_at=excluded.updated_at'
+                . 'media_json=excluded.media_json,published_at=excluded.published_at,edited_at=excluded.edited_at,'
+                . 'updated_at=excluded.updated_at,author_id=excluded.author_id'
             )->execute([$archiveId, $remoteId, (string) ($status['uri'] ?? ''), $statusUrl,
                 social_plain_text((string) ($status['content'] ?? '')), (string) ($status['spoiler_text'] ?? ''),
                 (string) $status['visibility'], json_encode($media, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-                (string) ($status['created_at'] ?? ''), (string) ($status['edited_at'] ?? ''), $now]);
+                (string) ($status['created_at'] ?? ''), (string) ($status['edited_at'] ?? ''), $now, $authorId]);
         }
         if (count($statuses) < 40) break;
     }
@@ -614,6 +629,7 @@ function social_sync_locked(?int $now = null): int
         plus_database()->prepare('DELETE FROM plus_social_statuses WHERE archive_id=? AND remote_id NOT IN (' . $placeholders . ')')
             ->execute(array_merge([$archiveId], array_keys($seen)));
     }
+    if (personal_photo_gallery_job_enabled()) personal_photo_gallery_sync_social_archive($archiveId, true, false);
     social_prune_unreferenced_media($archiveId);
     plus_database()->prepare('UPDATE plus_social_connection SET last_sync_at=?,last_error=\'\',updated_at=? WHERE id=1')->execute([$now, $now]);
     social_schedule_sync($now + 300);

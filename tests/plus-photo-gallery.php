@@ -111,11 +111,13 @@ try {
     $legacy->exec("CREATE TABLE plus_photo_gallery_overrides (asset_key TEXT PRIMARY KEY REFERENCES plus_photo_gallery_assets(asset_key) ON DELETE CASCADE,visibility TEXT NOT NULL,updated_at INTEGER NOT NULL)");
     ($GLOBALS['_pureblog_plus_migrations']['0012_media_capture_evidence'])($legacy);
     ($GLOBALS['_pureblog_plus_migrations']['0013_personal_photo_gallery'])($legacy);
+    ($GLOBALS['_pureblog_plus_migrations']['0015_personal_photo_gallery_sources'])($legacy);
     $legacyOccurrence = $legacy->query('SELECT media_id FROM plus_photo_gallery_latest_occurrences')->fetchColumn();
+    $legacySource = $legacy->query('SELECT source_type || \':\' || source_id FROM plus_photo_gallery_latest_occurrences')->fetchColumn();
     $legacySignature = $legacy->query('SELECT input_signature FROM plus_photo_gallery_classifications')->fetchColumn();
     $legacyAssetColumns = array_column($legacy->query('PRAGMA table_info(plus_photo_gallery_assets)')->fetchAll(), 'name');
     $legacy->exec("INSERT INTO plus_photo_gallery_assets (asset_key) VALUES ('new-asset')");
-    photo_gallery_assert($legacyOccurrence === 'legacy-media' && $legacySignature === 'legacy-signature'
+    photo_gallery_assert($legacyOccurrence === 'legacy-media' && $legacySource === 'post:legacy-post' && $legacySignature === 'legacy-signature'
         && $legacyAssetColumns === ['asset_key'], 'The first gallery schema cannot be upgraded without losing projection data or accepting new assets.');
 
     $database = plus_database();
@@ -141,8 +143,9 @@ try {
         'INSERT INTO plus_photo_gallery_assets (asset_key) VALUES (?)'
     );
     $occurrenceInsert = $database->prepare(
-        'INSERT INTO plus_photo_gallery_occurrences (post_slug,asset_key,media_id,position,alt_text,caption,post_title,published_at,context_text) '
-        . 'VALUES (?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO plus_photo_gallery_occurrences '
+        . '(source_type,source_id,source_url,asset_key,media_id,position,alt_text,caption,source_title,published_at,context_text) '
+        . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
     );
 
     $fixtures = [
@@ -163,12 +166,12 @@ try {
         $variants = json_encode(['360' => $preview, '720' => 'https://media.example.test/' . $name . '-720.webp'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $mediaInsert->execute([$id, 'local-media', $url, 'image/jpeg', $name . '.jpg', 1200, 800, $variants, '{}', '/private/' . $name . '.jpg', time(), 0, 0, $assetKey]);
         $assetInsert->execute([$assetKey]);
-        $occurrenceInsert->execute([$name . '-post', $assetKey, $id, $index, $alt, '', $postTitle, $publishedAt, $postTitle . "\n" . $alt]);
+        $occurrenceInsert->execute(['post', $name . '-post', '', $assetKey, $id, $index, $alt, '', $postTitle, $publishedAt, $postTitle . "\n" . $alt]);
         $keys[$name] = $assetKey;
         $ids[$name] = $id;
         $classes[$id] = $name === 'outage' ? null : ['class' => $class, 'confidence' => $confidence, 'reason' => 'fixture:' . $class];
     }
-    $occurrenceInsert->execute(['older-camera-post', $keys['camera'], $ids['camera'], 0, 'Older occurrence', '', 'Older lake post', '2026-10-01 10:00:00', 'Older lake post']);
+    $occurrenceInsert->execute(['post', 'older-camera-post', '', $keys['camera'], $ids['camera'], 0, 'Older occurrence', '', 'Older lake post', '2026-10-01 10:00:00', 'Older lake post']);
 
     $providerSideEffect = static function () use ($ids): void {
         $concurrent = new PDO('sqlite:' . plus_database_path(), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -184,7 +187,7 @@ try {
     $taggedKey = hash('sha256', 'asset-tagged-camera');
     $mediaInsert->execute([$taggedId, 'local-media', 'https://media.example.test/tagged-camera.jpg', 'image/jpeg', 'tagged-camera.jpg', 1200, 800, '{}', '{}', '/private/tagged-camera.jpg', time(), 0, 0, $taggedKey]);
     $assetInsert->execute([$taggedKey]);
-    $occurrenceInsert->execute(['tagged-camera-post', $taggedKey, $taggedId, 0, 'Mountain at sunrise', '', 'Walking', '2026-10-02 10:00:00', "Title: Walking\nDescription: Morning\nTags: fotografie, wandern\nImage alt: Mountain at sunrise\nImage caption: "]);
+    $occurrenceInsert->execute(['post', 'tagged-camera-post', '', $taggedKey, $taggedId, 0, 'Mountain at sunrise', '', 'Walking', '2026-10-02 10:00:00', "Title: Walking\nDescription: Morning\nTags: fotografie, wandern\nImage alt: Mountain at sunrise\nImage caption: "]);
     $classes[$taggedId] = null;
     $taggedClassification = personal_photo_gallery_classify($taggedKey);
     photo_gallery_assert(($taggedClassification['automatic_state'] ?? '') === 'visible'
@@ -247,10 +250,10 @@ try {
     photo_gallery_assert(str_starts_with((string) (personal_photo_gallery_classification($keys['camera'])['reason'] ?? ''), 'provider_error:'), 'Missing configured provider did not fail closed.');
     $GLOBALS['_pureblog_photo_gallery_config'] = $config;
     personal_photo_gallery_classify($keys['camera']);
-    $occurrenceInsert->execute(['stale-camera-post', $keys['camera'], $ids['camera'], 0, 'Book cover', '', 'Book cover', '2026-12-01 10:00:00', 'Book cover']);
+    $occurrenceInsert->execute(['post', 'stale-camera-post', '', $keys['camera'], $ids['camera'], 0, 'Book cover', '', 'Book cover', '2026-12-01 10:00:00', 'Book cover']);
     personal_photo_gallery_classify($keys['camera']);
     photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'excluded', 'Latest duplicate context did not control classification.');
-    $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE post_slug='stale-camera-post'")->execute();
+    $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id='stale-camera-post'")->execute();
     personal_photo_gallery_classify_assets([$keys['camera']]);
     photo_gallery_assert((personal_photo_gallery_classification($keys['camera'])['automatic_state'] ?? '') === 'visible', 'Removing the latest occurrence left a stale classification from its context.');
 
@@ -258,7 +261,7 @@ try {
     $duplicateUrl = 'https://media.example.test/camera-duplicate.jpg';
     $duplicateVariants = json_encode(['360' => 'https://media.example.test/camera-duplicate-360.webp'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     $mediaInsert->execute([$duplicateId, 'local-media', $duplicateUrl, 'image/jpeg', 'camera-duplicate.jpg', 1200, 800, $duplicateVariants, '{}', '/private/camera-duplicate.jpg', time(), 0, 0, $keys['camera']]);
-    $occurrenceInsert->execute(['newer-camera-post', $keys['camera'], $duplicateId, 0, 'Newer duplicate', '', 'Newer lake post', '2026-11-21 10:00:00', 'Newer lake post']);
+    $occurrenceInsert->execute(['post', 'newer-camera-post', '', $keys['camera'], $duplicateId, 0, 'Newer duplicate', '', 'Newer lake post', '2026-11-21 10:00:00', 'Newer lake post']);
     $preparedDuplicates = personal_photo_gallery_prepare_candidates([
         'title' => 'Duplicate use',
         'content' => '![First](https://media.example.test/camera.jpg) ![Second](https://media.example.test/camera-duplicate.jpg)',
@@ -302,6 +305,54 @@ try {
     $stats = personal_photo_gallery_stats();
     photo_gallery_assert($stats === ['visible' => 2, 'hidden' => 0, 'excluded' => 2, 'unknown' => 2], 'Gallery statistics are inconsistent.');
 
+    $database->prepare(
+        'INSERT INTO plus_social_archives (instance_url,account_id,account_url,account_name,created_at,frozen_at) VALUES (?,?,?,?,?,?)'
+    )->execute(['https://social.example', 'account-own', 'https://social.example/@own', 'own@social.example', time(), null]);
+    $socialArchiveId = (int) $database->lastInsertId();
+    $socialId = hash('md5', 'media-social-only');
+    $socialKey = hash('sha256', 'asset-social-only');
+    $socialUrl = 'https://media.example.test/social-only.jpg';
+    $mediaInsert->execute([$socialId, 'local-media', $socialUrl, 'image/jpeg', 'social-only.jpg', 1200, 800, '{}', '{}', '/private/social-only.jpg', time(), 1, 1, $socialKey]);
+    $statusInsert = $database->prepare(
+        'INSERT INTO plus_social_statuses '
+        . '(archive_id,remote_id,uri,url,content_text,spoiler_text,visibility,media_json,published_at,edited_at,updated_at,author_id) '
+        . 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+    );
+    $socialMedia = static fn(string $url, string $alt): string => json_encode([
+        ['type' => 'image', 'url' => $url, 'alt' => $alt],
+    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    $statusInsert->execute([$socialArchiveId, 'social-own', '', 'https://social.example/@own/social-own', 'Own social photo', '', 'public',
+        $socialMedia($socialUrl, 'Own mountain photo'), '2026-12-03T10:00:00Z', '', time(), 'account-own']);
+    $statusInsert->execute([$socialArchiveId, 'social-duplicate', '', 'https://social.example/@own/social-duplicate', 'Own duplicate photo', '', 'unlisted',
+        $socialMedia('https://media.example.test/camera.jpg', 'Same lake photo'), '2026-12-02T10:00:00Z', '', time(), 'account-own']);
+    $statusInsert->execute([$socialArchiveId, 'social-foreign', '', 'https://social.example/@other/social-foreign', 'Foreign photo', '', 'public',
+        $socialMedia($socialUrl, 'Foreign'), '2026-12-04T10:00:00Z', '', time(), 'account-foreign']);
+    $statusInsert->execute([$socialArchiveId, 'social-private', '', 'https://social.example/@own/social-private', 'Private photo', '', 'private',
+        $socialMedia($socialUrl, 'Private'), '2026-12-05T10:00:00Z', '', time(), 'account-own']);
+    photo_gallery_assert(personal_photo_gallery_sync_social_archive($socialArchiveId, false, false) === 2,
+        'The gallery did not project exactly the connected author\'s public Social image attachments.');
+    photo_gallery_assert((int) $database->query("SELECT COUNT(*) FROM plus_photo_gallery_occurrences WHERE source_type='social'")->fetchColumn() === 2,
+        'Foreign or private Social media entered the gallery projection.');
+    personal_photo_gallery_classify($socialKey);
+    $socialPage = personal_photo_gallery_page_items(null, 24);
+    photo_gallery_assert(count(array_filter($socialPage['items'], static fn(array $item): bool => $item['asset_key'] === $keys['camera'])) === 1,
+        'The same asset appeared twice through Blog and Social occurrences.');
+    $socialCamera = array_values(array_filter($socialPage['items'], static fn(array $item): bool => $item['asset_key'] === $keys['camera']))[0];
+    photo_gallery_assert(personal_photo_gallery_source_url($socialCamera) === 'https://social.example/@own/social-duplicate',
+        'The newest Social occurrence did not own the deduplicated source link.');
+    personal_photo_gallery_set_visibility($keys['camera'], 'hidden');
+    photo_gallery_assert(!in_array($keys['camera'], array_column(personal_photo_gallery_page_items(null, 24)['items'], 'asset_key'), true),
+        'An asset-wide manual hide did not cover its Social occurrence.');
+    personal_photo_gallery_set_visibility($keys['camera'], null);
+    $database->prepare('UPDATE plus_social_archives SET frozen_at=? WHERE id=?')->execute([time(), $socialArchiveId]);
+    photo_gallery_assert(personal_photo_gallery_sync_social_archive($socialArchiveId, false, false) === 2,
+        'A frozen personal archive lost its retained gallery projection.');
+    $database->prepare('DELETE FROM plus_social_statuses WHERE archive_id=?')->execute([$socialArchiveId]);
+    personal_photo_gallery_sync_social_archive($socialArchiveId, false, false);
+    photo_gallery_assert((int) $database->query("SELECT COUNT(*) FROM plus_photo_gallery_occurrences WHERE source_type='social'")->fetchColumn() === 0
+        && (int) $database->query("SELECT COUNT(*) FROM plus_photo_gallery_assets WHERE asset_key='{$socialKey}'")->fetchColumn() === 0,
+        'Removed Social statuses left stale gallery occurrences or orphaned assets.');
+
     $orphanKey = hash('sha256', 'temporarily-orphaned-asset');
     $assetInsert->execute([$orphanKey]);
     personal_photo_gallery_set_visibility($orphanKey, 'hidden');
@@ -318,7 +369,7 @@ try {
     $fallbackAltItem = personal_photo_gallery_page_items(null, 1)['items'][0];
     $fallbackAltItem['alt_text'] = '';
     $fallbackAltItem['caption'] = '';
-    $fallbackAltItem['post_title'] = 'Accessible source title';
+    $fallbackAltItem['source_title'] = 'Accessible source title';
     photo_gallery_assert(str_contains(personal_photo_gallery_render_items([$fallbackAltItem]), 'alt="Accessible source title"'), 'Gallery images without authored alt text have no accessible fallback.');
 
     $shapeItems = [];
@@ -340,7 +391,7 @@ try {
         $variants = json_encode(['360' => 'https://media.example.test/' . $name . '-360.webp'], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $mediaInsert->execute([$id, 'local-media', $url, 'image/jpeg', $name . '.jpg', 1200, 800, $variants, '{}', '/private/' . $name . '.jpg', time(), 1, $captureTime, $key]);
         $assetInsert->execute([$key]);
-        $occurrenceInsert->execute([$name . '-post', $key, $id, $index, $alt, '', $alt, '2026-10-0' . ($index + 1) . ' 10:00:00', $alt]);
+        $occurrenceInsert->execute(['post', $name . '-post', '', $key, $id, $index, $alt, '', $alt, '2026-10-0' . ($index + 1) . ' 10:00:00', $alt]);
         $classification = personal_photo_gallery_classify($key);
         photo_gallery_assert(($classification['automatic_state'] ?? '') === $expectedState, 'Local capture evidence did not fail closed around cover risk.');
     }
@@ -349,7 +400,7 @@ try {
     $disabledConfig['plugins']['enabled'] = ['local-media'];
     $GLOBALS['_pureblog_photo_gallery_config'] = $disabledConfig;
     personal_photo_gallery_sync_job(['slug' => 'camera-post']);
-    photo_gallery_assert((int) $database->query("SELECT COUNT(*) FROM plus_photo_gallery_occurrences WHERE post_slug='camera-post'")->fetchColumn() === 1, 'A queued sync job mutated the projection after the gallery was disabled.');
+    photo_gallery_assert((int) $database->query("SELECT COUNT(*) FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id='camera-post'")->fetchColumn() === 1, 'A queued sync job mutated the projection after the gallery was disabled.');
 
     $schema = $database->query('PRAGMA table_info(plus_media)')->fetchAll();
     $columns = array_column($schema, 'name');

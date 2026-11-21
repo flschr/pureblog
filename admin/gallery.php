@@ -98,21 +98,21 @@ require __DIR__ . '/../includes/admin-head.php';
                 $effective = (string) ($item['effective_state'] ?? 'unknown');
                 $override = (string) ($item['override_visibility'] ?? '');
                 $statusKey = $override === 'hidden' ? 'hidden' : ($override === 'visible' ? 'visible_manual' : $effective);
-                $thumbnailAlt = (string) ($item['alt_text'] ?: $item['caption'] ?: $item['post_title']);
+                $thumbnailAlt = (string) ($item['alt_text'] ?: $item['caption'] ?: $item['source_title']);
                 ?>
                 <li class="admin-list-item photo-gallery-admin-item">
                     <a class="photo-gallery-admin-thumb" href="<?= e((string) $item['url']) ?>" target="_blank" rel="noopener noreferrer">
                         <img src="<?= e((string) $item['preview_url']) ?>" alt="<?= e($thumbnailAlt) ?>" loading="lazy" width="<?= max(1, (int) $item['width']) ?>" height="<?= max(1, (int) $item['height']) ?>">
                     </a>
                     <div class="photo-gallery-admin-copy">
-                        <strong class="admin-list-title"><?= e((string) ($item['caption'] ?: $item['alt_text'] ?: $item['post_title'])) ?></strong>
+                        <strong class="admin-list-title"><?= e((string) ($item['caption'] ?: $item['alt_text'] ?: $item['source_title'])) ?></strong>
                         <div class="admin-list-meta">
                             <span><svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg><?= e(format_post_date_for_display((string) $item['published_at'], $config)) ?></span>
                             <span class="status <?= $effective === 'visible' ? 'published' : 'draft' ?>"><svg class="icon" aria-hidden="true"><use href="#icon-toggle-right"></use></svg><?= e(t('admin.photo_gallery.status_' . $statusKey)) ?></span>
                             <span title="<?= e((string) ($item['reason'] ?? '')) ?>"><?= e(t('admin.photo_gallery.class_' . ((string) ($item['visual_class'] ?? 'unknown')))) ?> · <?= e((string) round((float) ($item['confidence'] ?? 0) * 100)) ?>%</span>
                         </div>
                         <div class="admin-list-meta photo-gallery-admin-actions">
-                            <a class="admin-list-view" href="<?= e(base_path() . '/' . rawurlencode((string) $item['post_slug'])) ?>" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><?= e(t('admin.photo_gallery.view_post')) ?></a>
+                            <a class="admin-list-view" href="<?= e(personal_photo_gallery_source_url($item)) ?>" target="_blank" rel="noopener noreferrer"><svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg><?= e(t('admin.photo_gallery.view_post')) ?></a>
                             <form method="post">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="asset_key" value="<?= e((string) $item['asset_key']) ?>">
