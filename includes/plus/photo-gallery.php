@@ -444,6 +444,7 @@ function personal_photo_gallery_classify(string $assetKey): array
     );
     $query->execute([$assetKey]);
     $asset = $query->fetch();
+    $query->closeCursor();
     if (!is_array($asset)) throw new InvalidArgumentException('Unknown gallery asset.');
 
     $config = personal_photo_gallery_config();
@@ -457,6 +458,7 @@ function personal_photo_gallery_classify(string $assetKey): array
         $existing = plus_database()->prepare('SELECT * FROM plus_photo_gallery_classifications WHERE asset_key=? AND input_signature=?');
         $existing->execute([$assetKey, $inputSignature]);
         $classification = $existing->fetch();
+        $existing->closeCursor();
         if (is_array($classification)) return $classification;
         personal_photo_gallery_store_classification(
             $assetKey, $localDecision['visual_class'], $localDecision['confidence'], $localDecision['state'],
@@ -489,6 +491,7 @@ function personal_photo_gallery_classify(string $assetKey): array
     $existing = plus_database()->prepare('SELECT * FROM plus_photo_gallery_classifications WHERE asset_key=? AND input_signature=?');
     $existing->execute([$assetKey, $inputSignature]);
     $classification = $existing->fetch();
+    $existing->closeCursor();
     if (is_array($classification) && !str_starts_with((string) $classification['reason'], 'provider_error:')) return $classification;
 
     $visualClass = 'unknown';
