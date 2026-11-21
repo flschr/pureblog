@@ -26,6 +26,15 @@ function test_remove_tree(string $path): void
 
 $root = sys_get_temp_dir() . '/pureblog-content-' . bin2hex(random_bytes(8));
 define('PUREBLOG_DATA_PATH', $root . '/data');
+define('PUREBLOG_CONFIG_PATH', $root . '/config/config.php');
+define('PUREBLOG_POSTS_PATH', $root . '/posts');
+define('PUREBLOG_PAGES_PATH', $root . '/pages');
+$GLOBALS['_pureblog_test_cache_clears'] = 0;
+
+function cache_clear(): void
+{
+    $GLOBALS['_pureblog_test_cache_clears']++;
+}
 
 try {
     require dirname(__DIR__) . '/includes/lib/content.php';
@@ -50,6 +59,15 @@ try {
     });
     test_assert($order === ['outer', 'inner'], 'Content mutation lock is not reentrant.');
     test_assert((fileperms(PUREBLOG_DATA_PATH . '/content-mutations.lock') & 0777) === 0600, 'Mutation lock is not private.');
+
+    test_assert(save_config(['site_title' => 'Cache contract']), 'Configuration could not be saved atomically.');
+    test_assert($GLOBALS['_pureblog_test_cache_clears'] === 1, 'A successful configuration change left public page-cache entries active.');
+
+    mkdir(PUREBLOG_POSTS_PATH, 0755, true);
+    mkdir(PUREBLOG_PAGES_PATH, 0755, true);
+    file_put_contents(PUREBLOG_POSTS_PATH . '/2026-11-21-gallery.md', "---\nslug: gallery\nstatus: draft\n---\n\nDraft\n");
+    file_put_contents(PUREBLOG_PAGES_PATH . '/photos.md', "---\nslug: photos\nstatus: published\n---\n\nA deliberately large body is not needed for route conflict detection.\n");
+    test_assert(!published_content_slug_exists('gallery') && published_content_slug_exists('photos'), 'Fast public-route conflict detection ignored publication state or page metadata.');
 
     $deletedContent = $root . '/content/delete.md';
     $deletedImages = $root . '/images/delete';

@@ -10,7 +10,10 @@ plus_register_plugin([
     'description_key' => 'admin.settings.plugins.bundled.photo_gallery.description',
     'version' => '1.0.0',
     'api_version' => PUREBLOG_PLUGIN_API_VERSION,
-    'capabilities' => ['site.route' => 'personal_photo_gallery_route_handler'],
+    'capabilities' => [
+        'site.route' => 'personal_photo_gallery_route_handler',
+        'site.route_match' => 'personal_photo_gallery_route_matches',
+    ],
     'events' => [
         'post.saved' => 'personal_photo_gallery_event_post_saved',
         'post.deleted' => 'personal_photo_gallery_event_post_deleted',

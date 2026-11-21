@@ -85,6 +85,9 @@ Every bundled manifest declares a stable identifier, semantic version, plugin AP
 settings schema, and callable capabilities. Core validation rejects malformed identifiers,
 unknown API majors, invalid settings schemas, duplicate registrations, disabled providers,
 and providers that do not implement the selected capability. The initial API major is `1`.
+Public-route plugins may pair `site.route` with a side-effect-free `site.route_match` capability;
+the front controller can then check only content front matter for collisions before dispatching,
+instead of parsing every post and page body on a cold plugin-route request.
 
 Verification:
 

@@ -120,6 +120,16 @@ function plus_dispatch_public_route(string $requestPath, ?array $config = null):
     return false;
 }
 
+function plus_public_route_matches(string $requestPath, ?array $config = null): bool
+{
+    $config ??= load_config();
+    foreach (plus_enabled_plugin_ids($config) as $id) {
+        $handler = plus_plugins()[$id]['capabilities']['site.route_match'] ?? null;
+        if (is_callable($handler) && $handler($requestPath) === true) return true;
+    }
+    return false;
+}
+
 /** @return list<array{id:string,path:string,label:string,icon:string,plugin_id:string}> */
 function plus_plugin_admin_pages(?array $config = null): array
 {

@@ -106,7 +106,7 @@ try {
     plugin_media_assert(is_file((string) plus_media_by_url($media['url'])['local_source']), 'Private retained source is missing.');
     plus_set_media_default_alt($media['id'], "  A reusable blue image\n description.  ");
     $storedMedia = plus_media_by_url($media['url']);
-    plugin_media_assert(preg_match('/^[a-f0-9]{64}$/', (string) $storedMedia['source_fingerprint']) === 1, 'Normalized media fingerprint is missing.');
+    plugin_media_assert((string) $storedMedia['source_fingerprint'] === '', 'The upload path eagerly hashed media for an optional gallery projection.');
     plugin_media_assert(in_array((int) $storedMedia['capture_metadata'], [0, 1], true) && in_array((int) $storedMedia['capture_time'], [0, 1], true), 'Privacy-minimised capture evidence is invalid.');
     plugin_media_assert($storedMedia['default_alt'] === 'A reusable blue image description.', 'Default media description was not normalized and stored.');
     $missingAlt = plus_missing_media_alt_suggestions('Before ![](' . $media['url'] . ') after');

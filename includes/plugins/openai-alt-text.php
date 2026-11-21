@@ -8,7 +8,7 @@ plus_register_plugin([
     'name_key' => 'admin.settings.plugins.bundled.openai_alt.name',
     'description' => 'Creates editable alt-text suggestions and can classify gallery candidates. Images and editorial context are sent to the configured API.',
     'description_key' => 'admin.settings.plugins.bundled.openai_alt.description',
-    'version' => '1.0.0',
+    'version' => '1.1.0',
     'api_version' => PUREBLOG_PLUGIN_API_VERSION,
     'capabilities' => [
         'media.alt_suggestion' => 'plus_openai_alt_text_suggest',

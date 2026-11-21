@@ -98,10 +98,11 @@ require __DIR__ . '/../includes/admin-head.php';
                 $effective = (string) ($item['effective_state'] ?? 'unknown');
                 $override = (string) ($item['override_visibility'] ?? '');
                 $statusKey = $override === 'hidden' ? 'hidden' : ($override === 'visible' ? 'visible_manual' : $effective);
+                $thumbnailAlt = (string) ($item['alt_text'] ?: $item['caption'] ?: $item['post_title']);
                 ?>
                 <li class="admin-list-item photo-gallery-admin-item">
                     <a class="photo-gallery-admin-thumb" href="<?= e((string) $item['url']) ?>" target="_blank" rel="noopener noreferrer">
-                        <img src="<?= e((string) $item['preview_url']) ?>" alt="<?= e((string) $item['alt_text']) ?>" loading="lazy" width="<?= max(1, (int) $item['width']) ?>" height="<?= max(1, (int) $item['height']) ?>">
+                        <img src="<?= e((string) $item['preview_url']) ?>" alt="<?= e($thumbnailAlt) ?>" loading="lazy" width="<?= max(1, (int) $item['width']) ?>" height="<?= max(1, (int) $item['height']) ?>">
                     </a>
                     <div class="photo-gallery-admin-copy">
                         <strong class="admin-list-title"><?= e((string) ($item['caption'] ?: $item['alt_text'] ?: $item['post_title'])) ?></strong>
