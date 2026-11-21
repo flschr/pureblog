@@ -8,7 +8,7 @@ plus_register_plugin([
     'name_key' => 'admin.settings.plugins.bundled.photo_gallery.name',
     'description' => 'Builds a fast public gallery from likely author-captured photos in published posts.',
     'description_key' => 'admin.settings.plugins.bundled.photo_gallery.description',
-    'version' => '1.0.2',
+    'version' => '1.0.3',
     'api_version' => PUREBLOG_PLUGIN_API_VERSION,
     'capabilities' => [
         'site.route' => 'personal_photo_gallery_route_handler',
