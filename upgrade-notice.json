@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Outgoing Webmention retries now follow the current delivery lifecycle. Existing delivery references are reconciled once through the local job queue after updating."
+    "instructions": "This release adds the optional personal photo gallery. It stays disabled until explicitly enabled; activation queues a background rebuild, and uncertain images remain hidden for review."
 }
