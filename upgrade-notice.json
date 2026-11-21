@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "The personal photo gallery now recognizes conservatively matched recompressed copies as one asset, so the same photograph does not appear twice through Blog and Social sources. Existing galleries schedule one local rebuild after the update; posts and media files remain unchanged."
+    "instructions": "Outgoing Webmentions now request API responses from content-negotiating receivers and classify missing targets or endpoints that return HTTP 404 or 410 as unsupported. Existing permanent target failures are reconciled during the upgrade, while temporary and other protocol errors remain visible and retryable."
 }

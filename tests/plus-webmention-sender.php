@@ -36,7 +36,38 @@ try {
     sender_test_assert((int) $legacy->query('SELECT referenced FROM plus_webmention_deliveries WHERE id=1')->fetchColumn() === 1, 'Upgrade migration did not preserve an existing delivery conservatively.');
     sender_test_assert((int) $legacy->query("SELECT COUNT(*) FROM plus_jobs WHERE type='webmention.reconcile' AND state='queued'")->fetchColumn() === 1, 'Upgrade migration did not queue bounded reference reconciliation.');
     sender_test_assert((int) $legacy->query('SELECT COUNT(*) FROM plus_webmention_actionable_failures')->fetchColumn() === 1, 'Upgrade migration did not create the actionable-failure owner view.');
+
+    $terminalLegacy = new PDO('sqlite::memory:');
+    $terminalLegacy->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $terminalLegacy->exec(
+        "CREATE TABLE plus_webmention_deliveries ("
+        . "id INTEGER PRIMARY KEY,endpoint_url TEXT NOT NULL DEFAULT '',status TEXT NOT NULL,"
+        . "last_http_status INTEGER,last_error TEXT NOT NULL DEFAULT '',updated_at INTEGER NOT NULL);"
+        . "INSERT INTO plus_webmention_deliveries VALUES "
+        . "(1,'','failed',NULL,'Destination returned HTTP 404.',1),"
+        . "(2,'https://target.example/webmention','failed',410,'Destination returned HTTP 410.',1),"
+        . "(3,'https://target.example/webmention','failed',503,'Destination returned HTTP 503.',1)"
+    );
+    $GLOBALS['_pureblog_plus_migrations']['0016_webmention_terminal_status']($terminalLegacy);
+    $terminalStatuses = $terminalLegacy->query('SELECT id,status,last_http_status FROM plus_webmention_deliveries ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    sender_test_assert(
+        $terminalStatuses === [
+            ['id' => 1, 'status' => 'unsupported', 'last_http_status' => 404],
+            ['id' => 2, 'status' => 'unsupported', 'last_http_status' => 410],
+            ['id' => 3, 'status' => 'failed', 'last_http_status' => 503],
+        ],
+        'Terminal-target migration changed the wrong delivery states.'
+    );
+
     sender_test_assert(!is_dir(PUREBLOG_PLUS_DATA_PATH), 'Webmention sender initialized storage eagerly.');
+    sender_test_assert(
+        webmention_sender_request_headers('GET')[0] === 'Accept: text/html, application/xhtml+xml;q=0.9, */*;q=0.1',
+        'Webmention discovery no longer asks for HTML.'
+    );
+    sender_test_assert(
+        webmention_sender_request_headers('POST')[0] === 'Accept: application/json, text/plain;q=0.9, */*;q=0.1',
+        'Webmention delivery still asks for a browser HTML response.'
+    );
     sender_test_assert(webmention_sender_schedule_content('post', [
         'title' => 'Empty', 'slug' => 'empty', 'status' => 'published', 'content' => 'No external link.',
     ], 900) === [], 'Link-free content created a delivery job.');
@@ -140,6 +171,36 @@ try {
     ];
     webmention_sender_deliver((int) $unsupported['id'], $noEndpointResponse, $poster, 1030);
     sender_test_assert(webmention_sender_get((int) $unsupported['id'])['status'] === 'unsupported', 'Missing endpoint was not recorded.');
+
+    webmention_sender_schedule_targets('http://localhost/source', ['https://gone-target.example/post'], 1031);
+    $goneTarget = array_values(array_filter(webmention_sender_list(), static fn(array $item): bool => $item['target_url'] === 'https://gone-target.example/post'))[0];
+    $goneTargetResponse = static fn(string $url, string $method, array $form, int $limit): array => [
+        'ok' => false, 'status' => 404, 'headers' => [], 'content_type' => 'text/html',
+        'body' => '', 'error' => 'Destination returned HTTP 404.',
+    ];
+    webmention_sender_deliver((int) $goneTarget['id'], $goneTargetResponse, static function (): array {
+        throw new RuntimeException('A missing target reached the Webmention endpoint.');
+    }, 1032);
+    $goneTargetDelivery = webmention_sender_get((int) $goneTarget['id']);
+    sender_test_assert(
+        $goneTargetDelivery['status'] === 'unsupported' && (int) $goneTargetDelivery['last_http_status'] === 404,
+        'A terminally missing target remained a failed retry.'
+    );
+
+    webmention_sender_schedule_targets('http://localhost/source', ['https://gone-endpoint.example/post'], 1033);
+    $goneEndpoint = array_values(array_filter(webmention_sender_list(), static fn(array $item): bool => $item['target_url'] === 'https://gone-endpoint.example/post'))[0];
+    $goneEndpointResponse = static fn(string $url, string $method, array $form, int $limit): array => [
+        'ok' => true, 'status' => 200, 'headers' => ['link' => '</webmention>; rel=webmention'],
+        'content_type' => 'text/html', 'body' => '', 'url' => $url,
+    ];
+    webmention_sender_deliver((int) $goneEndpoint['id'], $goneEndpointResponse, static fn(): array => [
+        'ok' => false, 'status' => 410, 'error' => 'Destination returned HTTP 410.',
+    ], 1034);
+    $goneEndpointDelivery = webmention_sender_get((int) $goneEndpoint['id']);
+    sender_test_assert(
+        $goneEndpointDelivery['status'] === 'unsupported' && (int) $goneEndpointDelivery['last_http_status'] === 410,
+        'A terminally removed endpoint remained a failed retry.'
+    );
 
     webmention_sender_schedule_targets('http://localhost/source', ['https://private-endpoint.example/post'], 1035);
     $privateDelivery = array_values(array_filter(webmention_sender_list(), static fn(array $item): bool => $item['target_url'] === 'https://private-endpoint.example/post'))[0];

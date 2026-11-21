@@ -31,7 +31,11 @@ The local scheduler runs `php bin/plus-jobs.php` as described in the
 Discovery follows the Webmention order: HTTP `Link` headers first, followed by HTML `link`
 and `a` elements. Relative endpoints and endpoint query parameters are preserved. Target
 fetches and endpoint posts use the same private-network, redirect, time, and size boundaries
-as incoming verification. Every `2xx` endpoint response counts as successful delivery.
+as incoming verification. Discovery asks for HTML while the form POST asks for an API/JSON
+response, so content-negotiating receivers do not redirect the background worker to a browser
+status page. Every `2xx` endpoint response counts as successful delivery. A `404` or `410`
+from the target or its advertised endpoint records the receiver as unsupported without retry;
+other non-`2xx` responses remain delivery failures.
 
 The private incoming inbox and outgoing delivery status are available under **Admin →
 Webmentions**. Failed, queued, successful, and unsupported deliveries remain local and can
