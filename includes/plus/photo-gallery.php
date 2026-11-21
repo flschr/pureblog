@@ -262,6 +262,125 @@ function personal_photo_gallery_media_fingerprint(array $media): string
     return $fingerprint;
 }
 
+function personal_photo_gallery_media_visual_fingerprint(array $media): string
+{
+    $fingerprint = trim((string) ($media['visual_fingerprint'] ?? ''));
+    if (preg_match('/^[a-f0-9]{128}$/', $fingerprint) === 1) return $fingerprint;
+    $fingerprint = plus_media_visual_fingerprint(
+        (string) ($media['local_source'] ?? ''),
+        (string) ($media['mime_type'] ?? '')
+    );
+    if ($fingerprint !== '') {
+        plus_database()->prepare('UPDATE plus_media SET visual_fingerprint=? WHERE id=?')->execute([$fingerprint, $media['id']]);
+    }
+    return $fingerprint;
+}
+
+function personal_photo_gallery_visual_distance(string $left, string $right): int
+{
+    if (strlen($left) !== 128 || strlen($right) !== 128) return PHP_INT_MAX;
+    static $bits = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4];
+    $distance = 0;
+    for ($index = 0; $index < 128; $index++) {
+        $distance += $bits[hexdec($left[$index]) ^ hexdec($right[$index])];
+        if ($distance > 12) return $distance;
+    }
+    return $distance;
+}
+
+function personal_photo_gallery_same_shape(array $left, array $right): bool
+{
+    $leftWidth = (int) ($left['width'] ?? 0);
+    $leftHeight = (int) ($left['height'] ?? 0);
+    $rightWidth = (int) ($right['width'] ?? 0);
+    $rightHeight = (int) ($right['height'] ?? 0);
+    if ($leftWidth < 1 || $leftHeight < 1 || $rightWidth < 1 || $rightHeight < 1) return false;
+    $cross = abs($leftWidth * $rightHeight - $rightWidth * $leftHeight);
+    return $cross / max(1, $leftWidth * $rightHeight) <= 0.003;
+}
+
+/** @return array{asset_key:string,merge_asset_keys:list<string>} */
+function personal_photo_gallery_resolve_asset(array $media, string $exactFingerprint): array
+{
+    $fallback = $exactFingerprint !== '' ? $exactFingerprint : (string) $media['id'];
+    $visual = personal_photo_gallery_media_visual_fingerprint($media);
+    if ($visual === '') return ['asset_key' => $fallback, 'merge_asset_keys' => []];
+
+    $rows = plus_database()->query(
+        "SELECT DISTINCT o.asset_key,o.source_type,o.published_at,m.width,m.height,m.visual_fingerprint "
+        . "FROM plus_photo_gallery_occurrences o JOIN plus_media m ON m.id=o.media_id "
+        . "WHERE m.delete_state='active' AND m.visual_fingerprint<>'' "
+        . "ORDER BY CASE WHEN o.source_type='post' THEN 0 ELSE 1 END,o.published_at,o.asset_key"
+    )->fetchAll();
+    $matches = [];
+    foreach ($rows as $row) {
+        if (!is_array($row) || !personal_photo_gallery_same_shape($media, $row)) continue;
+        if (personal_photo_gallery_visual_distance($visual, (string) $row['visual_fingerprint']) > 12) continue;
+        $matches[] = (string) $row['asset_key'];
+    }
+    if ($matches === []) return ['asset_key' => $fallback, 'merge_asset_keys' => []];
+    $canonical = $matches[0];
+    return [
+        'asset_key' => $canonical,
+        'merge_asset_keys' => array_values(array_unique(array_filter(
+            array_merge($matches, [$fallback]),
+            static fn(string $key): bool => $key !== $canonical
+        ))),
+    ];
+}
+
+/** @param list<string> $aliases */
+function personal_photo_gallery_merge_assets(PDO $database, string $canonical, array $aliases): void
+{
+    $aliases = array_values(array_unique(array_filter($aliases, static fn(string $key): bool => $key !== $canonical)));
+    if ($aliases === []) return;
+    $database->prepare('INSERT OR IGNORE INTO plus_photo_gallery_assets (asset_key) VALUES (?)')->execute([$canonical]);
+    $selectVisibility = $database->prepare(
+        'SELECT v.visibility,v.updated_at,c.automatic_state FROM plus_photo_gallery_assets a '
+        . 'LEFT JOIN plus_photo_gallery_overrides v ON v.asset_key=a.asset_key '
+        . 'LEFT JOIN plus_photo_gallery_classifications c ON c.asset_key=a.asset_key WHERE a.asset_key=?'
+    );
+    $anyVisible = false;
+    $anyOverride = false;
+    $canonicalAutomatic = '';
+    $latestOverride = 0;
+    foreach (array_merge([$canonical], $aliases) as $assetKey) {
+        $selectVisibility->execute([$assetKey]);
+        $state = $selectVisibility->fetch();
+        if (!is_array($state)) continue;
+        $override = (string) ($state['visibility'] ?? '');
+        $automatic = (string) ($state['automatic_state'] ?? '');
+        if ($override !== '') $anyOverride = true;
+        if ($assetKey === $canonical) $canonicalAutomatic = $automatic;
+        if ($override === 'visible' || ($override === '' && $automatic === 'visible')) $anyVisible = true;
+        $latestOverride = max($latestOverride, (int) ($state['updated_at'] ?? 0));
+    }
+    $desiredOverride = !$anyOverride
+        ? null
+        : ($anyVisible ? ($canonicalAutomatic === 'visible' ? null : 'visible') : 'hidden');
+    if ($desiredOverride === null) {
+        $database->prepare('DELETE FROM plus_photo_gallery_overrides WHERE asset_key=?')->execute([$canonical]);
+    } else {
+        $database->prepare(
+            'INSERT INTO plus_photo_gallery_overrides (asset_key,visibility,updated_at) VALUES (?,?,?) '
+            . 'ON CONFLICT(asset_key) DO UPDATE SET visibility=excluded.visibility,updated_at=excluded.updated_at'
+        )->execute([$canonical, $desiredOverride, max($latestOverride, time())]);
+    }
+    $move = $database->prepare(
+        'INSERT OR IGNORE INTO plus_photo_gallery_occurrences '
+        . '(source_type,source_id,source_url,asset_key,media_id,position,alt_text,caption,source_title,published_at,context_text) '
+        . 'SELECT source_type,source_id,source_url,?,media_id,position,alt_text,caption,source_title,published_at,context_text '
+        . 'FROM plus_photo_gallery_occurrences WHERE asset_key=?'
+    );
+    $deleteOccurrences = $database->prepare('DELETE FROM plus_photo_gallery_occurrences WHERE asset_key=?');
+    $deleteAsset = $database->prepare('DELETE FROM plus_photo_gallery_assets WHERE asset_key=?');
+    foreach ($aliases as $alias) {
+        $move->execute([$canonical, $alias]);
+        $deleteOccurrences->execute([$alias]);
+        $deleteAsset->execute([$alias]);
+    }
+}
+
 /** @return array<string,array<string,mixed>> */
 function personal_photo_gallery_prepare_candidates(array $post): array
 {
@@ -270,7 +389,8 @@ function personal_photo_gallery_prepare_candidates(array $post): array
         $media = plus_media_by_url($candidate['url']);
         if ($media === null || !str_starts_with((string) ($media['mime_type'] ?? ''), 'image/')) continue;
         $fingerprint = personal_photo_gallery_media_fingerprint($media);
-        $assetKey = $fingerprint !== '' ? $fingerprint : (string) $media['id'];
+        $identity = personal_photo_gallery_resolve_asset($media, $fingerprint);
+        $assetKey = $identity['asset_key'];
         if (isset($prepared[$assetKey])) continue;
         $context = implode("\n", [
             'Title: ' . (string) ($post['title'] ?? ''),
@@ -281,7 +401,8 @@ function personal_photo_gallery_prepare_candidates(array $post): array
         ]);
         $prepared[$assetKey] = [
             'candidate' => $candidate, 'media_id' => (string) $media['id'],
-            'asset_key' => $assetKey, 'context' => mb_substr($context, 0, 2500),
+            'asset_key' => $assetKey, 'merge_asset_keys' => $identity['merge_asset_keys'],
+            'context' => mb_substr($context, 0, 2500),
         ];
     }
     return $prepared;
@@ -358,6 +479,7 @@ function personal_photo_gallery_sync_post(
             foreach ($preparedCandidates as $prepared) {
                 $candidate = $prepared['candidate'];
                 $assetKey = (string) $prepared['asset_key'];
+                personal_photo_gallery_merge_assets($database, $assetKey, $prepared['merge_asset_keys']);
                 $insertAsset->execute([$assetKey]);
                 $insertOccurrence->execute([
                     'post', $slug, '', $assetKey, $prepared['media_id'], $candidate['position'], $candidate['alt'], $candidate['caption'],
@@ -406,7 +528,8 @@ function personal_photo_gallery_prepare_social_candidates(array $status, array $
         $media = $localUrl !== '' ? plus_media_by_url($localUrl) : null;
         if ($media === null || !str_starts_with((string) ($media['mime_type'] ?? ''), 'image/')) continue;
         $fingerprint = personal_photo_gallery_media_fingerprint($media);
-        $assetKey = $fingerprint !== '' ? $fingerprint : (string) $media['id'];
+        $identity = personal_photo_gallery_resolve_asset($media, $fingerprint);
+        $assetKey = $identity['asset_key'];
         if (isset($prepared[$assetKey])) continue;
         $alt = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) ($item['alt'] ?? '')) ?? ''), 0, 1500);
         $context = implode("\n", [
@@ -418,6 +541,7 @@ function personal_photo_gallery_prepare_social_candidates(array $status, array $
         ]);
         $prepared[$assetKey] = [
             'asset_key' => $assetKey,
+            'merge_asset_keys' => $identity['merge_asset_keys'],
             'media_id' => (string) $media['id'],
             'position' => (int) $position,
             'alt' => $alt,
@@ -472,6 +596,7 @@ function personal_photo_gallery_sync_social_archive(
         );
         foreach ($prepared as $candidate) {
             $assetKey = (string) $candidate['asset_key'];
+            personal_photo_gallery_merge_assets($database, $assetKey, $candidate['merge_asset_keys']);
             $insertAsset->execute([$assetKey]);
             $insertOccurrence->execute([
                 'social', $candidate['source_id'], $candidate['source_url'], $assetKey, $candidate['media_id'],
