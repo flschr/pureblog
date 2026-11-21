@@ -9,19 +9,30 @@ The endpoint supports:
 - form-encoded and Microformats2 JSON `h-entry` creation
 - named articles and untitled notes
 - configuration and source queries
+- the post-list extension through `q=source` without a URL, including drafts
+- the category-list extension through `q=category`
+- advertised article, note, media, interaction, bookmark, and RSVP post types
 - `replace`, `add`, and `delete` updates
 - post deletion
 - image, audio, and video uploads through the same selected media provider as the admin editor
 
-Creating, updating, deleting, and uploading require the matching `create`, `update`,
-`delete`, or `media` scope. Tokens are accepted in the Authorization header and, for
+Creating, updating, and deleting require the matching `create`, `update`, or `delete`
+scope. The Media Endpoint accepts either `create` or the narrower `media` scope so that
+standard Micropub clients can use the same posting token while installations may still
+issue a dedicated upload token. Tokens are accepted in the Authorization header and, for
 form-encoded requests, in the `access_token` field.
+
+The post-list query returns up to 30 newest posts by default and accepts bounded `limit`
+and `offset` parameters. It includes published, scheduled, and draft posts because the
+authenticated list is an editing surface, not a public feed. Category queries include
+categories used by any of those posts and accept `filter`, `limit`, and `offset`.
 
 Posts remain ordinary files in `content/posts`. Native title, content, date, status, tags,
 and description fields use the existing Pure Blog representation. Supported Micropub
 relationships and media properties use reserved `micropub_*` front-matter keys so the
-admin editor can preserve them. SQLite contains credentials and operational state, never a
-second copy of editorial content.
+admin editor can preserve them. This includes replies, likes, reposts, bookmarks, RSVP
+values, syndication URLs, and image/audio/video properties. SQLite contains credentials
+and operational state, never a second copy of editorial content.
 
 Media Endpoint uploads use the bundled plugin contract. The standalone default stores them
 under `content/media/YYYY/MM` with random names. The server determines the actual MIME type,
@@ -57,5 +68,6 @@ php tests/plus-micropub.php
 php tests/plus-plugins-media.php
 ```
 
-The test covers form and JSON parsing, reserved commands, articles, notes, source
-properties, token authentication, and scope boundaries.
+The test covers form and JSON parsing, reserved commands, articles, notes, OutPost-style
+draft/bookmark/RSVP payloads, list and category queries, source properties, token
+authentication, Media Endpoint compatibility, and scope boundaries.

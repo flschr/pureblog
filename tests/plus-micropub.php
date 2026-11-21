@@ -54,6 +54,8 @@ try {
     $article = micropub_properties_to_post($jsonProperties, $jsonCommands);
     micropub_test_assert($article['title'] === 'An article' && $article['slug'] === 'custom-slug', 'Article mapping failed.');
     micropub_test_assert($article['micropub_content_format'] === 'html', 'HTML content format was lost.');
+    micropub_test_assert(micropub_config()['post-types'] === micropub_supported_post_types(), 'Supported post types were not advertised.');
+    micropub_test_assert(in_array(['type' => 'bookmark', 'name' => 'Bookmark'], micropub_supported_post_types(), true), 'Bookmark support was not advertised.');
 
     $note = micropub_properties_to_post([
         'content' => ['A short untitled note'],
@@ -66,6 +68,7 @@ try {
     $source = micropub_source($note);
     micropub_test_assert(!isset($source['properties']['name']), 'Generated note title leaked into source properties.');
     micropub_test_assert($source['properties']['content'] === ['A short untitled note'], 'Note content changed in source query.');
+    micropub_test_assert($source['properties']['url'] === [micropub_post_url($note)], 'Canonical post URL was missing from source.');
     micropub_test_assert($source['properties']['photo'][0]['alt'] === 'Example', 'Nested photo metadata was lost.');
     $mediaHtml = render_post_media($note);
     micropub_test_assert(str_contains($mediaHtml, 'alt="Example"'), 'Photo accessibility text was not rendered.');
@@ -104,6 +107,31 @@ try {
     $syndicatedPost = micropub_properties_to_post($syndicatedProperties, $syndicatedCommands);
     micropub_test_assert(!empty($syndicatedPost['social_announce']), 'JSON mp-syndicate-to did not select the connected social announcement path.');
 
+    $outpostPost = micropub_properties_to_post([
+        'name' => ['Autumn walk'],
+        'content' => ['Written from OutPost'],
+        'category' => ['Photos', 'Personal'],
+        'bookmark-of' => ['https://example.test/article'],
+        'rsvp' => ['maybe'],
+        'post-status' => ['draft'],
+    ]);
+    $outpostSource = micropub_source($outpostPost);
+    micropub_test_assert($outpostPost['status'] === 'draft', 'OutPost draft status was not preserved.');
+    micropub_test_assert($outpostSource['properties']['bookmark-of'] === ['https://example.test/article'], 'Bookmark target was not preserved.');
+    micropub_test_assert($outpostSource['properties']['rsvp'] === ['maybe'], 'RSVP value was not preserved.');
+    $listed = micropub_source_list(1, 0, [$outpostPost, $note]);
+    micropub_test_assert(count($listed['items']) === 1, 'Post-list limit was not applied.');
+    micropub_test_assert($listed['items'][0]['properties']['post-status'] === ['draft'], 'Post list omitted draft status.');
+    micropub_test_assert(
+        micropub_categories('per', 10, 0, [
+            ['tags' => ['Photos', 'Personal']],
+            ['tags' => ['personal', 'Film']],
+        ]) === ['Personal'],
+        'Category query did not filter and deduplicate tags.'
+    );
+    micropub_test_assert(micropub_query_window('500', '2') === [100, 2], 'Query limits were not bounded.');
+    micropub_test_throws(static fn(): array => micropub_query_window('-1', null), 'invalid_request');
+
     $draftPost = array_replace($nativePost, ['status' => 'draft']);
     $draftProperties = micropub_post_to_properties($draftPost);
     unset($draftProperties['post-status']);
@@ -141,6 +169,7 @@ try {
     );
     $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . $tokenResponse['access_token'];
     micropub_test_assert(micropub_require_token('create')['client_id'] === 'https://client.example/app', 'Create scope was rejected.');
+    micropub_test_assert(micropub_require_any_scope(['create', 'media'])['client_id'] === 'https://client.example/app', 'Create token was rejected by the Media Endpoint contract.');
     micropub_test_throws(static fn(): array => micropub_require_token('update'), 'insufficient_scope');
     unset($_SERVER['HTTP_AUTHORIZATION']);
 

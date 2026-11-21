@@ -58,6 +58,22 @@ function micropub_require_token(?string $requiredScope = null): array
     return $record;
 }
 
+function micropub_require_any_scope(array $requiredScopes): array
+{
+    $record = micropub_require_token();
+    foreach ($requiredScopes as $scope) {
+        if (is_string($scope) && in_array($scope, (array) $record['scope'], true)) {
+            return $record;
+        }
+    }
+    throw new MicropubProtocolException(
+        'insufficient_scope',
+        'The token does not grant a required scope.',
+        401,
+        (string) ($requiredScopes[0] ?? '')
+    );
+}
+
 function micropub_normalize_properties(array $properties): array
 {
     $normalized = [];
@@ -142,7 +158,62 @@ function micropub_note_title(string $content, string $published): string
 
 function micropub_supported_property_names(): array
 {
-    return ['name', 'summary', 'content', 'published', 'category', 'photo', 'video', 'audio', 'in-reply-to', 'like-of', 'repost-of', 'syndication', 'post-status'];
+    return [
+        'name', 'summary', 'content', 'published', 'category', 'photo', 'video', 'audio',
+        'in-reply-to', 'like-of', 'repost-of', 'bookmark-of', 'rsvp', 'syndication', 'post-status',
+    ];
+}
+
+function micropub_supported_post_types(): array
+{
+    return [
+        ['type' => 'article', 'name' => 'Article'],
+        ['type' => 'note', 'name' => 'Note'],
+        ['type' => 'photo', 'name' => 'Photo'],
+        ['type' => 'video', 'name' => 'Video'],
+        ['type' => 'reply', 'name' => 'Reply'],
+        ['type' => 'like', 'name' => 'Like'],
+        ['type' => 'repost', 'name' => 'Repost'],
+        ['type' => 'bookmark', 'name' => 'Bookmark'],
+        ['type' => 'rsvp', 'name' => 'RSVP'],
+    ];
+}
+
+function micropub_config(): array
+{
+    return [
+        'media-endpoint' => micropub_media_endpoint_url(),
+        'syndicate-to' => social_syndication_targets(),
+        'post-types' => micropub_supported_post_types(),
+    ];
+}
+
+function micropub_query_window(mixed $limit, mixed $offset, int $defaultLimit = 30, int $maximumLimit = 100): array
+{
+    $parse = static function (mixed $value, string $name, int $default): int {
+        if ($value === null || $value === '') return $default;
+        if (is_array($value) || filter_var($value, FILTER_VALIDATE_INT) === false || (int) $value < 0) {
+            throw new MicropubProtocolException('invalid_request', 'The ' . $name . ' value must be a non-negative integer.');
+        }
+        return (int) $value;
+    };
+    return [min($parse($limit, 'limit', $defaultLimit), $maximumLimit), $parse($offset, 'offset', 0)];
+}
+
+function micropub_categories(string $filter = '', int $limit = 100, int $offset = 0, ?array $posts = null): array
+{
+    $categories = [];
+    $posts ??= get_all_posts_meta(true);
+    foreach ($posts as $post) {
+        foreach ((array) ($post['tags'] ?? []) as $tag) {
+            $tag = trim((string) $tag);
+            if ($tag === '' || ($filter !== '' && mb_stripos($tag, $filter) === false)) continue;
+            $categories[mb_strtolower($tag)] ??= $tag;
+        }
+    }
+    $categories = array_values($categories);
+    natcasesort($categories);
+    return array_values(array_slice($categories, $offset, $limit));
 }
 
 function micropub_properties_to_post(array $properties, array $commands = [], ?array $existing = null): array
@@ -199,7 +270,8 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
             'layout', 'feature_image', 'categories', 'micropub_kind', 'micropub_content_format',
             'social_announce',
             'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to',
-            'micropub_like_of', 'micropub_repost_of', 'micropub_syndication',
+            'micropub_like_of', 'micropub_repost_of', 'micropub_bookmark_of', 'micropub_rsvp',
+            'micropub_syndication',
         ], true);
         foreach ($existing as $fieldName => $fieldValue) {
             if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
@@ -220,7 +292,7 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
             ? 'note-' . format_datetime_for_display($published, load_config(), 'Ymd-His')
             : $post['title'];
     }
-    foreach (['photo', 'video', 'audio', 'in-reply-to', 'like-of', 'repost-of', 'syndication'] as $name) {
+    foreach (['photo', 'video', 'audio', 'in-reply-to', 'like-of', 'repost-of', 'bookmark-of', 'rsvp', 'syndication'] as $name) {
         $values = (array) ($properties[$name] ?? []);
         if ($values !== []) {
             $post['micropub_' . str_replace('-', '_', $name)] = json_encode($values, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -276,6 +348,7 @@ function micropub_post_to_properties(array $post): array
         $content = substr($content, 0, -1);
     }
     $properties = [
+        'url' => [micropub_post_url($post)],
         'content' => ($post['micropub_content_format'] ?? '') === 'html'
             ? [['html' => $content]]
             : [$content],
@@ -289,7 +362,7 @@ function micropub_post_to_properties(array $post): array
     if (trim((string) ($post['description'] ?? '')) !== '') {
         $properties['summary'] = [(string) $post['description']];
     }
-    foreach (['photo', 'video', 'audio', 'in-reply-to', 'like-of', 'repost-of', 'syndication'] as $name) {
+    foreach (['photo', 'video', 'audio', 'in-reply-to', 'like-of', 'repost-of', 'bookmark-of', 'rsvp', 'syndication'] as $name) {
         $key = 'micropub_' . str_replace('-', '_', $name);
         if (!empty($post[$key])) {
             $decoded = json_decode((string) $post[$key], true);
@@ -299,6 +372,16 @@ function micropub_post_to_properties(array $post): array
         }
     }
     return $properties;
+}
+
+function micropub_source_list(int $limit = 30, int $offset = 0, ?array $posts = null): array
+{
+    $items = [];
+    $posts ??= get_all_posts(true);
+    foreach (array_slice($posts, $offset, $limit) as $post) {
+        $items[] = ['type' => ['h-entry'], 'properties' => micropub_post_to_properties($post)];
+    }
+    return ['items' => $items];
 }
 
 function micropub_source(array $post, array $requested = []): array

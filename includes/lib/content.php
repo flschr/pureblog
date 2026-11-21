@@ -1536,7 +1536,7 @@ function save_post_locked(array &$post, ?string $originalSlug = null, ?string $o
         $frontMatter['social_announce'] = 'true';
     }
 
-    foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_syndication'] as $fieldName) {
+    foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_bookmark_of', 'micropub_rsvp', 'micropub_syndication'] as $fieldName) {
         if (isset($post[$fieldName]) && trim((string) $post[$fieldName]) !== '') {
             $frontMatter[$fieldName] = trim((string) $post[$fieldName]);
         }

@@ -13,7 +13,7 @@ try {
         header('Allow: POST');
         throw new MicropubProtocolException('invalid_request', 'The media endpoint requires POST.', 405);
     }
-    micropub_require_token('media');
+    micropub_require_any_scope(['create', 'media']);
     $file = $_FILES['file'] ?? null;
     if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         throw new MicropubProtocolException('invalid_request', 'A complete file upload is required.');

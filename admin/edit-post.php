@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id'])) 
     $originalDate = trim($_POST['original_date'] ?? '');
 
     if (is_array($originalExisting)) {
-        foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_syndication'] as $fieldName) {
+        foreach (['micropub_kind', 'micropub_content_format', 'micropub_photo', 'micropub_video', 'micropub_audio', 'micropub_in_reply_to', 'micropub_like_of', 'micropub_repost_of', 'micropub_bookmark_of', 'micropub_rsvp', 'micropub_syndication'] as $fieldName) {
             if (array_key_exists($fieldName, $originalExisting)) {
                 $post[$fieldName] = $originalExisting[$fieldName];
             }
