@@ -96,6 +96,40 @@ plus_register_migration('0013_personal_photo_gallery', static function (PDO $dat
     );
 });
 
+plus_register_migration('0015_personal_photo_gallery_sources', static function (PDO $database): void {
+    $columns = array_column($database->query('PRAGMA table_info(plus_photo_gallery_occurrences)')->fetchAll(), 'name');
+    if (in_array('source_type', $columns, true)) return;
+    $database->exec('DROP VIEW IF EXISTS plus_photo_gallery_latest_occurrences');
+    $database->exec(
+        "CREATE TABLE plus_photo_gallery_occurrences_v3 ("
+        . 'source_type TEXT NOT NULL CHECK (source_type IN (\'post\',\'social\')),'
+        . 'source_id TEXT NOT NULL,source_url TEXT NOT NULL DEFAULT \'\','
+        . 'asset_key TEXT NOT NULL REFERENCES plus_photo_gallery_assets(asset_key) ON DELETE CASCADE,'
+        . 'media_id TEXT NOT NULL,position INTEGER NOT NULL,'
+        . "alt_text TEXT NOT NULL DEFAULT '',caption TEXT NOT NULL DEFAULT '',"
+        . "source_title TEXT NOT NULL DEFAULT '',published_at TEXT NOT NULL,context_text TEXT NOT NULL DEFAULT '',"
+        . 'PRIMARY KEY (source_type,source_id,asset_key))'
+    );
+    $database->exec(
+        'INSERT INTO plus_photo_gallery_occurrences_v3 '
+        . '(source_type,source_id,source_url,asset_key,media_id,position,alt_text,caption,source_title,published_at,context_text) '
+        . "SELECT 'post',post_slug,'',asset_key,media_id,position,alt_text,caption,post_title,published_at,context_text "
+        . 'FROM plus_photo_gallery_occurrences'
+    );
+    $database->exec('DROP TABLE plus_photo_gallery_occurrences');
+    $database->exec('ALTER TABLE plus_photo_gallery_occurrences_v3 RENAME TO plus_photo_gallery_occurrences');
+    $database->exec('CREATE INDEX plus_photo_gallery_occurrence_date_idx ON plus_photo_gallery_occurrences (published_at DESC,asset_key DESC)');
+    $database->exec('CREATE INDEX plus_photo_gallery_occurrence_asset_idx ON plus_photo_gallery_occurrences (asset_key,published_at DESC,source_type DESC,source_id DESC)');
+    $database->exec(
+        "CREATE VIEW plus_photo_gallery_latest_occurrences AS SELECT o.* FROM plus_photo_gallery_occurrences o "
+        . "JOIN plus_media current_media ON current_media.id=o.media_id AND current_media.delete_state='active' "
+        . "WHERE NOT EXISTS (SELECT 1 FROM plus_photo_gallery_occurrences newer JOIN plus_media newer_media "
+        . "ON newer_media.id=newer.media_id AND newer_media.delete_state='active' WHERE newer.asset_key=o.asset_key "
+        . "AND (newer.published_at>o.published_at OR (newer.published_at=o.published_at AND (newer.source_type>o.source_type "
+        . "OR (newer.source_type=o.source_type AND newer.source_id>o.source_id)))))"
+    );
+});
+
 /** @return array{route:string,title:string,page_size:int} */
 function personal_photo_gallery_settings(?array $config = null): array
 {
@@ -303,29 +337,30 @@ function personal_photo_gallery_sync_post(
     plus_begin_immediate($database);
     $assetKeys = [];
     try {
-        $existingAssets = $database->prepare('SELECT asset_key FROM plus_photo_gallery_occurrences WHERE post_slug=?');
+        $existingAssets = $database->prepare("SELECT asset_key FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id=?");
         foreach (array_unique(array_filter([$slug, $oldSlug], static fn(mixed $value): bool => is_string($value) && $value !== '')) as $affectedSlug) {
             $existingAssets->execute([$affectedSlug]);
             foreach ($existingAssets->fetchAll(PDO::FETCH_COLUMN) as $assetKey) $assetKeys[(string) $assetKey] = true;
         }
         if ($oldSlug !== null && $oldSlug !== '' && $oldSlug !== $slug) {
-            $database->prepare('DELETE FROM plus_photo_gallery_occurrences WHERE post_slug=?')->execute([$oldSlug]);
+            $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id=?")->execute([$oldSlug]);
         }
-        $database->prepare('DELETE FROM plus_photo_gallery_occurrences WHERE post_slug=?')->execute([$slug]);
+        $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id=?")->execute([$slug]);
         if ($preparedCandidates !== []) {
             $insertAsset = $database->prepare(
                 'INSERT OR IGNORE INTO plus_photo_gallery_assets (asset_key) VALUES (?)'
             );
             $insertOccurrence = $database->prepare(
-                'INSERT INTO plus_photo_gallery_occurrences (post_slug,asset_key,media_id,position,alt_text,caption,post_title,published_at,context_text) '
-                . 'VALUES (?,?,?,?,?,?,?,?,?)'
+                'INSERT INTO plus_photo_gallery_occurrences '
+                . '(source_type,source_id,source_url,asset_key,media_id,position,alt_text,caption,source_title,published_at,context_text) '
+                . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
             );
             foreach ($preparedCandidates as $prepared) {
                 $candidate = $prepared['candidate'];
                 $assetKey = (string) $prepared['asset_key'];
                 $insertAsset->execute([$assetKey]);
                 $insertOccurrence->execute([
-                    $slug, $assetKey, $prepared['media_id'], $candidate['position'], $candidate['alt'], $candidate['caption'],
+                    'post', $slug, '', $assetKey, $prepared['media_id'], $candidate['position'], $candidate['alt'], $candidate['caption'],
                     (string) ($post['title'] ?? ''), (string) ($post['date'] ?? ''), $prepared['context'],
                 ]);
                 $assetKeys[$assetKey] = true;
@@ -344,6 +379,118 @@ function personal_photo_gallery_sync_post(
         if ($invalidateCache) cache_clear();
     }
     return count($assetKeys);
+}
+
+/** @return array<string,array<string,mixed>> */
+function personal_photo_gallery_prepare_social_candidates(array $status, array $archive): array
+{
+    $accountId = trim((string) ($archive['account_id'] ?? ''));
+    if ($accountId === '' || !hash_equals($accountId, trim((string) ($status['author_id'] ?? '')))
+        || !in_array((string) ($status['visibility'] ?? ''), ['public', 'unlisted'], true)) return [];
+    $remoteId = trim((string) ($status['remote_id'] ?? ''));
+    $sourceUrl = trim((string) ($status['url'] ?? ''));
+    $sourceParts = parse_url($sourceUrl);
+    if ($remoteId === '' || !is_array($sourceParts)
+        || !in_array(strtolower((string) ($sourceParts['scheme'] ?? '')), ['http', 'https'], true)) return [];
+    $mediaItems = json_decode((string) ($status['media_json'] ?? '[]'), true);
+    if (!is_array($mediaItems)) return [];
+    $content = trim(preg_replace('/\s+/u', ' ', implode(' ', [
+        (string) ($status['spoiler_text'] ?? ''), (string) ($status['content_text'] ?? ''),
+    ])) ?? '');
+    $accountName = trim((string) ($archive['account_name'] ?? ''));
+    $sourceTitle = $content !== '' ? mb_substr($content, 0, 200) : ($accountName !== '' ? '@' . $accountName : 'Social post');
+    $prepared = [];
+    foreach ($mediaItems as $position => $item) {
+        if (!is_array($item) || (string) ($item['type'] ?? '') !== 'image') continue;
+        $localUrl = trim((string) ($item['url'] ?? ''));
+        $media = $localUrl !== '' ? plus_media_by_url($localUrl) : null;
+        if ($media === null || !str_starts_with((string) ($media['mime_type'] ?? ''), 'image/')) continue;
+        $fingerprint = personal_photo_gallery_media_fingerprint($media);
+        $assetKey = $fingerprint !== '' ? $fingerprint : (string) $media['id'];
+        if (isset($prepared[$assetKey])) continue;
+        $alt = mb_substr(trim(preg_replace('/\s+/u', ' ', (string) ($item['alt'] ?? '')) ?? ''), 0, 1500);
+        $context = implode("\n", [
+            'Title: ' . ($accountName !== '' ? 'Social post by @' . $accountName : 'Social post'),
+            'Description: ' . $content,
+            'Tags: ',
+            'Image alt: ' . $alt,
+            'Image caption: ',
+        ]);
+        $prepared[$assetKey] = [
+            'asset_key' => $assetKey,
+            'media_id' => (string) $media['id'],
+            'position' => (int) $position,
+            'alt' => $alt,
+            'source_id' => (int) $archive['id'] . ':' . $remoteId,
+            'source_url' => $sourceUrl,
+            'source_title' => $sourceTitle,
+            'published_at' => (string) ($status['published_at'] ?? ''),
+            'context' => mb_substr($context, 0, 2500),
+        ];
+    }
+    return $prepared;
+}
+
+function personal_photo_gallery_sync_social_archive(
+    int $archiveId,
+    bool $scheduleClassifications = true,
+    bool $invalidateCache = true
+): int {
+    if ($archiveId <= 0 || !personal_photo_gallery_job_enabled()) return 0;
+    $database = plus_database();
+    $archiveQuery = $database->prepare('SELECT * FROM plus_social_archives WHERE id=?');
+    $archiveQuery->execute([$archiveId]);
+    $archive = $archiveQuery->fetch();
+    if (!is_array($archive) || trim((string) ($archive['account_id'] ?? '')) === '') return 0;
+    $statuses = $database->prepare(
+        "SELECT * FROM plus_social_statuses WHERE archive_id=? AND author_id=? AND visibility IN ('public','unlisted') "
+        . 'ORDER BY published_at,remote_id'
+    );
+    $statuses->execute([$archiveId, (string) $archive['account_id']]);
+    $prepared = [];
+    foreach ($statuses->fetchAll() ?: [] as $status) {
+        foreach (personal_photo_gallery_prepare_social_candidates($status, $archive) as $assetKey => $candidate) {
+            $prepared[(string) $candidate['source_id'] . ':' . $assetKey] = $candidate;
+        }
+    }
+    $prefix = $archiveId . ':';
+    $existing = $database->prepare(
+        "SELECT asset_key FROM plus_photo_gallery_occurrences WHERE source_type='social' AND source_id LIKE ?"
+    );
+    $existing->execute([$prefix . '%']);
+    $affected = array_fill_keys(array_map('strval', $existing->fetchAll(PDO::FETCH_COLUMN)), true);
+    plus_begin_immediate($database);
+    try {
+        $database->prepare(
+            "DELETE FROM plus_photo_gallery_occurrences WHERE source_type='social' AND source_id LIKE ?"
+        )->execute([$prefix . '%']);
+        $insertAsset = $database->prepare('INSERT OR IGNORE INTO plus_photo_gallery_assets (asset_key) VALUES (?)');
+        $insertOccurrence = $database->prepare(
+            'INSERT INTO plus_photo_gallery_occurrences '
+            . '(source_type,source_id,source_url,asset_key,media_id,position,alt_text,caption,source_title,published_at,context_text) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        );
+        foreach ($prepared as $candidate) {
+            $assetKey = (string) $candidate['asset_key'];
+            $insertAsset->execute([$assetKey]);
+            $insertOccurrence->execute([
+                'social', $candidate['source_id'], $candidate['source_url'], $assetKey, $candidate['media_id'],
+                $candidate['position'], $candidate['alt'], '', $candidate['source_title'], $candidate['published_at'], $candidate['context'],
+            ]);
+            $affected[$assetKey] = true;
+        }
+        personal_photo_gallery_prune_orphan_assets($database);
+        $database->exec('COMMIT');
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->exec('ROLLBACK');
+        throw $error;
+    }
+    try {
+        if ($scheduleClassifications) personal_photo_gallery_schedule_classifications(array_keys($affected));
+    } finally {
+        if ($invalidateCache) cache_clear();
+    }
+    return count($prepared);
 }
 
 /**
@@ -436,7 +583,7 @@ function personal_photo_gallery_local_decision(array $asset, ?array $config = nu
 function personal_photo_gallery_classify(string $assetKey): array
 {
     $query = plus_database()->prepare(
-        'SELECT a.*,m.id AS media_id,m.capture_metadata,m.capture_time,o.context_text,o.alt_text,o.caption,o.post_title '
+        'SELECT a.*,m.id AS media_id,m.capture_metadata,m.capture_time,o.context_text,o.alt_text,o.caption,o.source_title '
         . 'FROM plus_photo_gallery_assets a '
         . 'JOIN plus_photo_gallery_latest_occurrences o ON o.asset_key=a.asset_key '
         . "JOIN plus_media m ON m.id=o.media_id AND m.delete_state='active' "
@@ -498,7 +645,7 @@ function personal_photo_gallery_classify(string $assetKey): array
     $confidence = 0.0;
     $state = 'unknown';
     $reason = 'insufficient_evidence';
-    $riskText = mb_strtolower(implode(' ', [(string) $asset['alt_text'], (string) $asset['caption'], (string) $asset['post_title']]));
+    $riskText = mb_strtolower(implode(' ', [(string) $asset['alt_text'], (string) $asset['caption'], (string) $asset['source_title']]));
     $artworkRisk = preg_match('/\b(?:filmplakat|movie poster|poster|plakat|buchcover|book cover|buchumschlag|albumcover|album art|covermotiv|screenshot|bildschirmfoto|bildschirmaufnahme|logo|illustration|infografik|zeichnung|dokument|document|scan|eintrittskarte|fahrkarte|ticket)\b/u', $riskText) === 1;
 
     if ($classifier === null) {
@@ -588,12 +735,12 @@ function personal_photo_gallery_rebuild(): int
             }
         }
         $staleSlugs = [];
-        foreach ($database->query('SELECT DISTINCT post_slug FROM plus_photo_gallery_occurrences')->fetchAll(PDO::FETCH_COLUMN) as $projectedSlug) {
+        foreach ($database->query("SELECT DISTINCT source_id FROM plus_photo_gallery_occurrences WHERE source_type='post'")->fetchAll(PDO::FETCH_COLUMN) as $projectedSlug) {
             if (!isset($publishedLookup[(string) $projectedSlug])) $staleSlugs[] = (string) $projectedSlug;
         }
         plus_begin_immediate($database);
         try {
-            $delete = $database->prepare('DELETE FROM plus_photo_gallery_occurrences WHERE post_slug=?');
+            $delete = $database->prepare("DELETE FROM plus_photo_gallery_occurrences WHERE source_type='post' AND source_id=?");
             foreach ($staleSlugs as $staleSlug) {
                 $delete->execute([$staleSlug]);
             }
@@ -602,6 +749,10 @@ function personal_photo_gallery_rebuild(): int
         } catch (Throwable $error) {
             if ($database->inTransaction()) $database->exec('ROLLBACK');
             throw $error;
+        }
+        foreach ($database->query('SELECT id FROM plus_social_archives ORDER BY id')->fetchAll(PDO::FETCH_COLUMN) as $archiveId) {
+            $count += personal_photo_gallery_sync_social_archive((int) $archiveId, false, false);
+            plus_job_heartbeat();
         }
         $assetKeys = array_map(
             'strval',
@@ -715,7 +866,7 @@ function personal_photo_gallery_page_items(?string $cursor, int $limit): array
         $params = [$decoded[0], $decoded[0], $decoded[1]];
     }
     $sql = "SELECT a.asset_key,m.id AS media_id,m.url,m.variants_json,m.mime_type,m.width,m.height,"
-        . "m.capture_metadata,m.capture_time,o.post_slug,o.post_title,o.published_at,o.alt_text,o.caption,"
+        . "m.capture_metadata,m.capture_time,o.source_type,o.source_id,o.source_url,o.source_title,o.published_at,o.alt_text,o.caption,"
         . "c.visual_class,c.confidence,c.automatic_state,v.visibility AS override_visibility "
         . "FROM plus_photo_gallery_assets a JOIN plus_photo_gallery_latest_occurrences o ON o.asset_key=a.asset_key "
         . "JOIN plus_media m ON m.id=o.media_id AND m.delete_state='active' "
@@ -743,6 +894,17 @@ function personal_photo_gallery_hydrate_item(array $item): array
     ksort($item['variants'], SORT_NUMERIC);
     $item['preview_url'] = $item['variants'] !== [] ? (string) reset($item['variants']) : (string) ($item['url'] ?? '');
     return $item;
+}
+
+function personal_photo_gallery_source_url(array $item): string
+{
+    if ((string) ($item['source_type'] ?? 'post') === 'social') {
+        $url = trim((string) ($item['source_url'] ?? ''));
+        $parts = parse_url($url);
+        if (is_array($parts) && in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)) return $url;
+        return base_path() . '/social.php';
+    }
+    return base_path() . '/' . rawurlencode((string) ($item['source_id'] ?? ''));
 }
 
 /** @param list<array<string,mixed>> $items @return list<list<array<string,mixed>>> */
@@ -781,8 +943,8 @@ function personal_photo_gallery_render_items(array $items, bool $firstPage = fal
         $html .= '<div class="personal-photo-gallery-row" style="--photo-columns:' . implode(' ', $columns) . '">';
         foreach ($row as $itemIndex => $item) {
             $caption = trim((string) ($item['caption'] ?: $item['alt_text']));
-            $alt = trim((string) ($item['alt_text'] ?: $item['caption'] ?: $item['post_title']));
-            $sourceUrl = base_path() . '/' . rawurlencode((string) $item['post_slug']);
+            $alt = trim((string) ($item['alt_text'] ?: $item['caption'] ?: $item['source_title']));
+            $sourceUrl = personal_photo_gallery_source_url($item);
             $variants = (array) $item['variants'];
             ksort($variants, SORT_NUMERIC);
             $srcset = [];
@@ -793,7 +955,7 @@ function personal_photo_gallery_render_items(array $items, bool $firstPage = fal
             $sizes = '(max-width: 720px) calc(' . $viewportWidth . 'vw - 0.5rem), min(' . $maximumWidth . 'rem, calc(' . $viewportWidth . 'vw - 1rem))';
             $eager = $firstPage && $rowIndex === 0;
             $priority = $eager ? ' fetchpriority="high"' : '';
-            $html .= '<figure class="personal-photo-gallery-item"><a class="personal-photo-gallery-link" href="' . e((string) $item['url']) . '" data-pb-lightbox data-alt="' . e($alt) . '" data-caption="' . e($caption) . '" data-source-url="' . e($sourceUrl) . '" data-source-title="' . e((string) $item['post_title']) . '">';
+            $html .= '<figure class="personal-photo-gallery-item"><a class="personal-photo-gallery-link" href="' . e((string) $item['url']) . '" data-pb-lightbox data-alt="' . e($alt) . '" data-caption="' . e($caption) . '" data-source-url="' . e($sourceUrl) . '" data-source-title="' . e((string) $item['source_title']) . '">';
             $html .= '<img src="' . e((string) $item['preview_url']) . '" alt="' . e($alt) . '" width="' . max(1, (int) $item['width']) . '" height="' . max(1, (int) $item['height']) . '" loading="' . ($eager ? 'eager' : 'lazy') . '" decoding="async"' . $priority;
             if ($srcset !== []) $html .= ' srcset="' . implode(', ', $srcset) . '" sizes="' . e($sizes) . '"';
             $html .= '></a></figure>';
@@ -876,12 +1038,12 @@ function personal_photo_gallery_admin_items(string $filter = 'all', string $sear
     elseif ($filter === 'excluded') $where[] = "v.visibility IS NULL AND c.automatic_state='excluded'";
     elseif ($filter === 'unknown') $where[] = "v.visibility IS NULL AND COALESCE(c.automatic_state,'unknown')='unknown'";
     if ($search !== '') {
-        $where[] = '(o.post_title LIKE ? ESCAPE \'\\\' OR o.alt_text LIKE ? ESCAPE \'\\\' OR o.caption LIKE ? ESCAPE \'\\\')';
+        $where[] = '(o.source_title LIKE ? ESCAPE \'\\\' OR o.alt_text LIKE ? ESCAPE \'\\\' OR o.caption LIKE ? ESCAPE \'\\\')';
         $needle = '%' . str_replace(['\\','%','_'], ['\\\\','\\%','\\_'], $search) . '%';
         $params = [$needle, $needle, $needle];
     }
     $sql = 'SELECT a.asset_key,m.id AS media_id,m.url,m.variants_json,m.mime_type,m.width,m.height,'
-        . 'm.capture_metadata,m.capture_time,o.post_slug,o.post_title,o.published_at,o.alt_text,o.caption,'
+        . 'm.capture_metadata,m.capture_time,o.source_type,o.source_id,o.source_url,o.source_title,o.published_at,o.alt_text,o.caption,'
         . 'c.visual_class,c.confidence,c.automatic_state,c.reason,v.visibility AS override_visibility,'
         . $state . ' AS effective_state FROM plus_photo_gallery_assets a '
         . 'JOIN plus_photo_gallery_latest_occurrences o ON o.asset_key=a.asset_key '

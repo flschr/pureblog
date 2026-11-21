@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Photo classification now releases SQLite read snapshots before external provider work, so concurrent live writes no longer force otherwise successful gallery jobs to retry. Gallery pagination progressively loads the next page near the viewport while preserving the normal link as a no-JavaScript and error fallback."
+    "instructions": "The personal photo gallery now includes image attachments from public and unlisted original statuses authored by the connected Social account. Immutable author IDs exclude foreign posts and boosts; private statuses, quoted media, and link previews remain outside the gallery. Blog and Social occurrences share deduplication, classification, and manual visibility overrides."
 }

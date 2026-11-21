@@ -50,7 +50,10 @@ always wins. The standalone CMS never requires an AI service. Generation failure
 the media upload or post save.
 
 `personal-photo-gallery` is an optional derived view over managed images that occur in published
-posts. It never copies editorial content and never changes a post or media file. The public route
+posts and in the connected owner's public or unlisted original Social statuses. Social authorship
+is verified against the immutable account ID stored for that connection; boosts, foreign authors,
+private statuses, quoted media, and link previews are never gallery sources. It never copies
+editorial content and never changes a post, status, or media file. The public route
 defaults to `/gallery` and renders a server-side proportional-row layout with intrinsic dimensions,
 responsive sources, cursor pagination, progressive enhancement, and the shared lightbox. The first
 public version is deliberately one chronological stream without filters. Add the configured route to
@@ -68,8 +71,10 @@ leaves the image undecided and is retried by the background job runner.
 The private gallery admin page supports search and the states visible, hidden, automatically excluded,
 and undecided. A manual show or hide is a separate override that survives rebuilds, reclassification,
 and provider changes. Removing the override restores automatic selection. Hiding an image affects only
-the gallery and its lightbox sequence; the source post and media URL remain published. The projection is
-rebuilt in background jobs after activation and updated after later post saves or deletions.
+the gallery and its lightbox sequence; the source post or status and media URL remain published.
+The projection is rebuilt in background jobs after activation and updated after later post saves,
+deletions, or successful Social reconciliations. The same captured image is shown only once when it
+occurs in both sources, and its manual visibility override applies everywhere.
 
 Managed deletion is durable: the database marks an asset as deleting before invoking its
 provider. If provider or local cleanup fails, the record remains retryable and a later attempt
