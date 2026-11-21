@@ -266,10 +266,18 @@ function personal_photo_gallery_media_visual_fingerprint(array $media): string
 {
     $fingerprint = trim((string) ($media['visual_fingerprint'] ?? ''));
     if (preg_match('/^[a-f0-9]{128}$/', $fingerprint) === 1) return $fingerprint;
-    $fingerprint = plus_media_visual_fingerprint(
-        (string) ($media['local_source'] ?? ''),
-        (string) ($media['mime_type'] ?? '')
-    );
+    $path = (string) ($media['local_source'] ?? '');
+    $mime = (string) ($media['mime_type'] ?? '');
+    if (!is_file($path)) {
+        $resolver = $GLOBALS['_pureblog_photo_gallery_media_path_resolver'] ?? null;
+        if (is_callable($resolver)) {
+            $resolved = $resolver($media);
+            $path = is_string($resolved) && is_file($resolved) ? $resolved : '';
+            $info = $path !== '' ? @getimagesize($path) : false;
+            if (is_array($info) && isset($info['mime'])) $mime = (string) $info['mime'];
+        }
+    }
+    $fingerprint = plus_media_visual_fingerprint($path, $mime);
     if ($fingerprint !== '') {
         plus_database()->prepare('UPDATE plus_media SET visual_fingerprint=? WHERE id=?')->execute([$fingerprint, $media['id']]);
     }

@@ -210,7 +210,7 @@ try {
     $visualSocialId = hash('md5', 'visual-social');
     $visualBlogKey = hash('sha256', 'visual-blog-exact');
     $visualSocialKey = hash('sha256', 'visual-social-exact');
-    $mediaInsert->execute([$visualBlogId, 'local-media', 'https://media.example.test/visual-blog.jpg', 'image/jpeg', 'visual-blog.jpg', 320, 240, '{}', '{}', $visualBlogPath, time(), 0, 0, $visualBlogKey]);
+    $mediaInsert->execute([$visualBlogId, 'local-media', 'https://media.example.test/visual-blog.jpg', 'image/jpeg', 'visual-blog.jpg', 320, 240, '{"720":"https://media.example.test/visual-blog-720.webp"}', '{}', '', time(), 0, 0, $visualBlogKey]);
     $mediaInsert->execute([$visualSocialId, 'local-media', 'https://media.example.test/visual-social.jpg', 'image/jpeg', 'visual-social.jpg', 1600, 1200, '{}', '{}', $visualSocialPath, time(), 0, 0, $visualSocialKey]);
     $assetInsert->execute([$visualBlogKey]);
     $assetInsert->execute([$visualSocialKey]);
@@ -219,6 +219,9 @@ try {
     personal_photo_gallery_store_classification($visualBlogKey, 'camera_photo', 0.99, 'visible', 'fixture:camera_photo', 'local', '1', 'visual-blog');
     personal_photo_gallery_store_classification($visualSocialKey, 'camera_photo', 0.99, 'visible', 'fixture:camera_photo', 'local', '1', 'visual-social');
     personal_photo_gallery_set_visibility($visualSocialKey, 'hidden');
+    $GLOBALS['_pureblog_photo_gallery_media_path_resolver'] = static function (array $media) use ($visualBlogPath): string {
+        return $media['url'] === 'https://media.example.test/visual-blog.jpg' ? $visualBlogPath : '';
+    };
     personal_photo_gallery_media_visual_fingerprint(plus_media_by_url('https://media.example.test/visual-blog.jpg'));
     $visualIdentity = personal_photo_gallery_resolve_asset(
         plus_media_by_url('https://media.example.test/visual-social.jpg'),
@@ -234,6 +237,7 @@ try {
         'Recompressed Blog and Social occurrences still own separate gallery assets.');
     photo_gallery_assert($database->query("SELECT visibility FROM plus_photo_gallery_overrides WHERE asset_key='{$visualBlogKey}'")->fetchColumn() === false,
         'Hiding only the redundant copy incorrectly hid the surviving visible photograph.');
+    unset($GLOBALS['_pureblog_photo_gallery_media_path_resolver']);
     $database->prepare('DELETE FROM plus_photo_gallery_assets WHERE asset_key=?')->execute([$visualBlogKey]);
     $database->prepare('DELETE FROM plus_media WHERE id IN (?,?)')->execute([$visualBlogId, $visualSocialId]);
 
