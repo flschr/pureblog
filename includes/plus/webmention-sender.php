@@ -46,6 +46,33 @@ plus_register_migration('0012_webmention_delivery_lifecycle', static function (P
     }
 });
 
+plus_register_migration('0016_webmention_terminal_status', static function (PDO $database): void {
+    $update = $database->prepare(
+        "UPDATE plus_webmention_deliveries SET status='unsupported',"
+        . "last_http_status=CASE "
+        . "WHEN last_http_status IS NOT NULL THEN last_http_status "
+        . "WHEN endpoint_url='' AND last_error='Destination returned HTTP 404.' THEN 404 "
+        . "WHEN endpoint_url='' AND last_error='Destination returned HTTP 410.' THEN 410 "
+        . "ELSE last_http_status END,updated_at=? "
+        . "WHERE status='failed' AND (last_http_status IN (404,410) OR "
+        . "(endpoint_url='' AND last_error IN ('Destination returned HTTP 404.','Destination returned HTTP 410.')))"
+    );
+    $update->execute([time()]);
+});
+
+final class WebmentionUnsupportedTargetException extends RuntimeException
+{
+    public function __construct(string $message, private ?int $httpStatus = null)
+    {
+        parent::__construct($message);
+    }
+
+    public function httpStatus(): ?int
+    {
+        return $this->httpStatus;
+    }
+}
+
 function webmention_sender_content_url(string $type, string $slug): string
 {
     if (!in_array($type, ['post', 'page'], true) || trim($slug) === '') {
@@ -322,6 +349,14 @@ function webmention_sender_retry(int $id, ?int $now = null): bool
     }
 }
 
+function webmention_sender_request_headers(string $method): array
+{
+    $accept = strtoupper($method) === 'POST'
+        ? 'Accept: application/json, text/plain;q=0.9, */*;q=0.1'
+        : 'Accept: text/html, application/xhtml+xml;q=0.9, */*;q=0.1';
+    return [$accept, 'User-Agent: PureBlog-Plus-Webmention'];
+}
+
 function webmention_sender_safe_request(string $url, string $method = 'GET', array $form = [], int $maximumBytes = 1048576): array
 {
     if (!function_exists('curl_init')) {
@@ -348,7 +383,7 @@ function webmention_sender_safe_request(string $url, string $method = 'GET', arr
     if ($handle === false) {
         return ['ok' => false, 'error' => 'Unable to initialize Webmention request.'];
     }
-    $requestHeaders = ['Accept: text/html, application/xhtml+xml;q=0.9, */*;q=0.1', 'User-Agent: PureBlog-Plus-Webmention'];
+    $requestHeaders = webmention_sender_request_headers($method);
     $options = [
         CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_CONNECTTIMEOUT => 3,
@@ -497,7 +532,12 @@ function webmention_sender_discover_endpoint(string $targetUrl, ?callable $reque
 {
     $response = webmention_sender_fetch_target($targetUrl, $requester);
     if (!($response['ok'] ?? false)) {
-        throw new RuntimeException((string) ($response['error'] ?? 'Unable to fetch Webmention target.'));
+        $status = (int) ($response['status'] ?? 0);
+        $error = (string) ($response['error'] ?? 'Unable to fetch Webmention target.');
+        if (in_array($status, [404, 410], true)) {
+            throw new WebmentionUnsupportedTargetException($error, $status);
+        }
+        throw new RuntimeException($error);
     }
     $baseUrl = (string) ($response['url'] ?? $targetUrl);
     $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
@@ -540,10 +580,27 @@ function webmention_sender_deliver(int $id, ?callable $requester = null, ?callab
         if (!is_array($response) || !($response['ok'] ?? false)) {
             $status = is_array($response) ? (int) ($response['status'] ?? 0) : 0;
             $error = is_array($response) ? (string) ($response['error'] ?? 'Webmention endpoint rejected the request.') : 'Invalid Webmention delivery response.';
+            if (in_array($status, [404, 410], true)) {
+                webmention_sender_update_delivery($id, $generation, 'unsupported', $endpoint, $status, $error, $now);
+                return;
+            }
             webmention_sender_update_delivery($id, $generation, 'failed', $endpoint, $status > 0 ? $status : null, $error, $now);
             throw new RuntimeException($error);
         }
         webmention_sender_update_delivery($id, $generation, 'sent', $endpoint, (int) ($response['status'] ?? 0), '', $now);
+    } catch (WebmentionUnsupportedTargetException $error) {
+        $latest = webmention_sender_get($id);
+        if ($latest !== null && (int) $latest['generation'] === $generation) {
+            webmention_sender_update_delivery(
+                $id,
+                $generation,
+                'unsupported',
+                (string) ($latest['endpoint_url'] ?? ''),
+                $error->httpStatus(),
+                $error->getMessage(),
+                $now
+            );
+        }
     } catch (Throwable $error) {
         $latest = webmention_sender_get($id);
         if ($latest !== null && (int) $latest['generation'] === $generation && $latest['status'] !== 'failed') {

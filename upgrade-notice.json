@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "The personal photo gallery now includes image attachments from public and unlisted original statuses authored by the connected Social account. Immutable author IDs exclude foreign posts and boosts; private statuses, quoted media, and link previews remain outside the gallery. Blog and Social occurrences share deduplication, classification, and manual visibility overrides."
+    "instructions": "Outgoing Webmentions now request API responses from content-negotiating receivers and classify missing targets or endpoints that return HTTP 404 or 410 as unsupported. Existing permanent target failures are reconciled during the upgrade, while temporary and other protocol errors remain visible and retryable."
 }

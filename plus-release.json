@@ -1,7 +1,7 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.23",
+    "version": "3.9.2-plus.24",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
@@ -23,7 +23,7 @@
         "includes/plus/indieauth-tokens.php": "48177dd0aa3de1a79dd919799e47b2ed0411e87d57617524130ad08759539af5",
         "includes/plus/micropub.php": "abb72e1b8e4efcc4d0bb14d0033fae111403b15ad3f203a92725cf415b6953f8",
         "includes/plus/webmentions.php": "34dc5dafa73ede0ae6ab3b1fb65a914b7b425f6741e4b5dcfaf84e49774cb214",
-        "includes/plus/webmention-sender.php": "94605c45fb612f01a8e775b529bd20cef5d92a9b3cd34c5e62a72e96ce157e5c",
+        "includes/plus/webmention-sender.php": "00cc1ede0e56b423c320861db9c7ce04434b6baa958c09115e81b70d4d29e351",
         "includes/plus/social-connector.php": "e959dbe8df1581a0c6d190f33dccdcbc7d931275063a2a159f08327f8224165b",
         "indieauth/authorize.php": "47fd31c5bdeb7ffed46f6613cadb9cd6587d4c0428b25028beebaa15527d197d",
         "indieauth/metadata.php": "37bd70916cf6aa75596586c00211a053d184b54d3e803137a3e799f898a0b4c8",
