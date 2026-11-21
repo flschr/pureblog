@@ -128,15 +128,18 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
     $stored = null;
     try {
         [$width, $height] = plus_media_dimensions($source, $mime);
+        $captureEvidence = ['capture_metadata' => false, 'capture_time' => false];
         if (str_starts_with($mime, 'image/')) {
             $maximumPixels = class_exists('Imagick') ? 60000000 : 30000000;
             if ($width < 1 || $height < 1 || $width > 20000 || $height > 20000 || $width * $height > $maximumPixels) {
                 throw new InvalidArgumentException('The image dimensions are invalid or too large for this server.');
             }
+            $captureEvidence = personal_photo_gallery_capture_evidence($source, $mime);
             plus_normalize_image($source, $mime);
             call_hook('on_image_uploaded', [$source]);
             [$width, $height] = plus_media_dimensions($source, $mime);
         }
+        $sourceFingerprint = str_starts_with($mime, 'image/') ? personal_photo_gallery_source_fingerprint($source) : '';
         $originalName = $id . '.' . $types[$mime];
         $files = [[
             'role' => 'original', 'path' => $source, 'name' => $originalName,
@@ -165,14 +168,14 @@ function plus_store_uploaded_media(array $file, bool $requireUploadedFile = true
             }
         }
         $statement = $database->prepare(
-            'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,width,height,variants_json,provider_data_json,local_source,created_at) '
-            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO plus_media (id,provider_id,url,mime_type,original_name,width,height,variants_json,provider_data_json,local_source,created_at,capture_metadata,capture_time,source_fingerprint) '
+            . 'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $statement->execute([
             $id, $provider['id'], $url, $mime, basename((string) ($file['name'] ?? $originalName)), $width ?: null, $height ?: null,
             json_encode($variants, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             json_encode((array) ($stored['provider_data'] ?? []), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            $source, $createdAt,
+            $source, $createdAt, $captureEvidence['capture_metadata'] ? 1 : 0, $captureEvidence['capture_time'] ? 1 : 0, $sourceFingerprint,
         ]);
         return [
             'id' => $id, 'provider' => $provider['id'], 'url' => $url, 'mime_type' => $mime,

@@ -14,7 +14,7 @@ function cache_should_bypass(array $config): bool
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
         return true;
     }
-    if (isset($_GET['q'])) {
+    if (isset($_GET['q']) || isset($_GET['partial'])) {
         return true;
     }
     $hasSession = !empty($_COOKIE[session_name()]);

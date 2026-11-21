@@ -21,6 +21,8 @@ function plus_register_plugin(array $plugin): void
     $apiVersion = (int) ($plugin['api_version'] ?? 0);
     $capabilities = $plugin['capabilities'] ?? [];
     $settings = $plugin['settings'] ?? [];
+    $events = $plugin['events'] ?? [];
+    $adminPages = $plugin['admin_pages'] ?? [];
 
     if (preg_match('/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/', $id) !== 1) {
         throw new InvalidArgumentException('Invalid plugin identifier.');
@@ -31,7 +33,7 @@ function plus_register_plugin(array $plugin): void
     if ($apiVersion !== PUREBLOG_PLUGIN_API_VERSION) {
         throw new RuntimeException('Plugin API is incompatible: ' . $id);
     }
-    if (!is_array($capabilities) || !is_array($settings)) {
+    if (!is_array($capabilities) || !is_array($settings) || !is_array($events) || !is_array($adminPages)) {
         throw new InvalidArgumentException('Invalid plugin contract: ' . $id);
     }
     foreach ($capabilities as $capability => $handler) {
@@ -48,6 +50,25 @@ function plus_register_plugin(array $plugin): void
             || !in_array($definition['type'] ?? '', ['text', 'password', 'url', 'select', 'checkbox'], true)) {
             throw new InvalidArgumentException('Invalid plugin setting: ' . $id);
         }
+        if (($definition['type'] ?? '') === 'select'
+            && (!is_array($definition['options'] ?? null) || ($definition['options'] ?? []) === [])) {
+            throw new InvalidArgumentException('Invalid plugin select setting: ' . $id);
+        }
+    }
+    foreach ($events as $event => $handler) {
+        if (!is_string($event)
+            || preg_match('/^[a-z][a-z0-9]*(?:\.[a-z0-9_]+)+$/', $event) !== 1
+            || !is_callable($handler)) {
+            throw new InvalidArgumentException('Invalid plugin event: ' . $id);
+        }
+    }
+    foreach ($adminPages as $page) {
+        if (!is_array($page)
+            || preg_match('/^[a-z][a-z0-9-]*$/', (string) ($page['id'] ?? '')) !== 1
+            || preg_match('#^admin/[a-z0-9-]+\.php$#', (string) ($page['path'] ?? '')) !== 1
+            || trim((string) ($page['label'] ?? '')) === '') {
+            throw new InvalidArgumentException('Invalid plugin admin page: ' . $id);
+        }
     }
     if (isset($GLOBALS['_pureblog_plus_plugins'][$id])) {
         throw new LogicException('Plugin already registered: ' . $id);
@@ -55,6 +76,8 @@ function plus_register_plugin(array $plugin): void
     $plugin['description'] = trim((string) ($plugin['description'] ?? ''));
     $plugin['capabilities'] = $capabilities;
     $plugin['settings'] = $settings;
+    $plugin['events'] = $events;
+    $plugin['admin_pages'] = $adminPages;
     $GLOBALS['_pureblog_plus_plugins'][$id] = $plugin;
 }
 
@@ -64,13 +87,56 @@ function plus_load_bundled_plugins(): void
         return;
     }
     $GLOBALS['_pureblog_plus_plugins_loaded'] = true;
-    foreach (['local-media.php', 's3-media.php', 'openai-alt-text.php'] as $filename) {
+    foreach (['local-media.php', 's3-media.php', 'openai-alt-text.php', 'personal-photo-gallery.php'] as $filename) {
         $path = PUREBLOG_BUNDLED_PLUGINS_PATH . '/' . $filename;
         if (!is_file($path)) {
             throw new RuntimeException('Bundled plugin is missing: ' . $filename);
         }
         require $path;
     }
+}
+
+function plus_emit_plugin_event(string $event, array $arguments = [], ?array $config = null): void
+{
+    $config ??= load_config();
+    foreach (plus_enabled_plugin_ids($config) as $id) {
+        $handler = plus_plugins()[$id]['events'][$event] ?? null;
+        if (!is_callable($handler)) continue;
+        try {
+            $handler(...$arguments);
+        } catch (Throwable $error) {
+            error_log('Pure Blog plugin event failed (' . $id . ', ' . $event . '): ' . $error->getMessage());
+        }
+    }
+}
+
+function plus_dispatch_public_route(string $requestPath, ?array $config = null): bool
+{
+    $config ??= load_config();
+    foreach (plus_enabled_plugin_ids($config) as $id) {
+        $handler = plus_plugins()[$id]['capabilities']['site.route'] ?? null;
+        if (is_callable($handler) && $handler($requestPath) === true) return true;
+    }
+    return false;
+}
+
+/** @return list<array{id:string,path:string,label:string,icon:string,plugin_id:string}> */
+function plus_plugin_admin_pages(?array $config = null): array
+{
+    $config ??= load_config();
+    $pages = [];
+    foreach (plus_enabled_plugin_ids($config) as $id) {
+        foreach ((array) (plus_plugins()[$id]['admin_pages'] ?? []) as $page) {
+            $labelKey = trim((string) ($page['label_key'] ?? ''));
+            $pages[] = [
+                'id' => (string) $page['id'], 'path' => (string) $page['path'],
+                'label' => $labelKey !== '' ? t($labelKey) : (string) $page['label'],
+                'icon' => preg_replace('/[^a-z0-9-]/', '', (string) ($page['icon'] ?? '')) ?: 'file-text',
+                'plugin_id' => $id,
+            ];
+        }
+    }
+    return $pages;
 }
 
 /** @return array<string,array<string,mixed>> */
@@ -162,13 +228,15 @@ function plus_prepare_plugin_configuration(array $currentConfig, array $input): 
     $requestedEnabled = array_values(array_filter((array) ($input['enabled'] ?? []), 'is_string'));
     $storageProvider = trim((string) ($input['provider']['media.storage'] ?? 'local-media'));
     $altProvider = trim((string) ($input['provider']['media.alt_suggestion'] ?? ''));
+    $photoProvider = trim((string) ($input['provider']['media.photo_classification'] ?? ''));
     $requestedEnabled[] = 'local-media';
     if ($storageProvider !== '') $requestedEnabled[] = $storageProvider;
     if ($altProvider !== '') $requestedEnabled[] = $altProvider;
+    if ($photoProvider !== '') $requestedEnabled[] = $photoProvider;
     $enabled = array_values(array_unique(array_intersect($requestedEnabled, array_keys($plugins))));
     $errors = [];
-    foreach (['media.storage' => $storageProvider, 'media.alt_suggestion' => $altProvider] as $capability => $providerId) {
-        if ($providerId === '' && $capability === 'media.alt_suggestion') continue;
+    foreach (['media.storage' => $storageProvider, 'media.alt_suggestion' => $altProvider, 'media.photo_classification' => $photoProvider] as $capability => $providerId) {
+        if ($providerId === '' && $capability !== 'media.storage') continue;
         if (!isset($plugins[$providerId]['capabilities'][$capability]) || !in_array($providerId, $enabled, true)) {
             $errors[] = ['code' => 'provider', 'field' => $capability, 'plugin' => $providerId];
         }
@@ -185,7 +253,10 @@ function plus_prepare_plugin_configuration(array $currentConfig, array $input): 
             if ($value === '' && array_key_exists('default', $definition) && $type !== 'password') {
                 $value = $definition['default'];
             }
-            $isSelected = $id === $storageProvider || $id === $altProvider;
+            if ($type === 'select' && !array_key_exists((string) $value, (array) ($definition['options'] ?? []))) {
+                $value = (string) ($definition['default'] ?? array_key_first((array) $definition['options']));
+            }
+            $isSelected = $id === $storageProvider || $id === $altProvider || $id === $photoProvider;
             if ($isSelected && $value === '') {
                 $errors[] = ['code' => 'required', 'field' => plus_plugin_setting_label($definition, $key), 'plugin' => plus_plugin_label($plugin, 'name')];
             }
@@ -199,7 +270,11 @@ function plus_prepare_plugin_configuration(array $currentConfig, array $input): 
     return [
         'plugins' => [
             'enabled' => $enabled,
-            'providers' => ['media.storage' => $storageProvider, 'media.alt_suggestion' => $altProvider],
+            'providers' => [
+                'media.storage' => $storageProvider,
+                'media.alt_suggestion' => $altProvider,
+                'media.photo_classification' => $photoProvider,
+            ],
             'settings' => $settings,
         ],
         'errors' => $errors,

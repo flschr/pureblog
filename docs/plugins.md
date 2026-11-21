@@ -49,6 +49,28 @@ alt text. Micropub clients can provide their own alt text without this plugin, a
 always wins. The standalone CMS never requires an AI service. Generation failures never fail
 the media upload or post save.
 
+`personal-photo-gallery` is an optional derived view over managed images that occur in published
+posts. It never copies editorial content and never changes a post or media file. The public route
+defaults to `/gallery` and renders a server-side proportional-row layout with intrinsic dimensions,
+responsive sources, cursor pagination, progressive enhancement, and the shared lightbox. The first
+public version is deliberately one chronological stream without filters. Add the configured route to
+the site's custom navigation when it should appear in the public menu.
+
+The gallery includes only images that are confidently classified as camera photographs or photographs
+of a physical work in a real scene. Direct covers, film posters, album art, screenshots, illustrations,
+documents, and uncertain images stay out. New uploads retain only two privacy-minimised capture signals
+before metadata is stripped: whether camera metadata and an original capture time were present. No GPS
+or full EXIF data is stored. Existing managed images can be classified by selecting a provider for
+`media.photo_classification`; the bundled OpenAI provider sends the smallest responsive image plus up
+to 2,500 characters of editorial context and does not request API-side storage. A provider failure
+leaves the image undecided and is retried by the background job runner.
+
+The private gallery admin page supports search and the states visible, hidden, automatically excluded,
+and undecided. A manual show or hide is a separate override that survives rebuilds, reclassification,
+and provider changes. Removing the override restores automatic selection. Hiding an image affects only
+the gallery and its lightbox sequence; the source post and media URL remain published. The projection is
+rebuilt in background jobs after activation and updated after later post saves or deletions.
+
 Managed deletion is durable: the database marks an asset as deleting before invoking its
 provider. If provider or local cleanup fails, the record remains retryable and a later attempt
 continues the same idempotent deletion.

@@ -253,6 +253,11 @@ unset($_SESSION['admin_action_flash']);
                 <li>
                     <a href="<?= base_path() ?>/admin/images.php"<?= $adminPath === 'admin/images.php' ? ' class="current"' : '' ?> title="<?= e(t('admin.nav.images')) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg><span><?= e(t('admin.nav.images')) ?></span></a>
                 </li>
+                <?php foreach (plus_plugin_admin_pages($config) as $pluginPage): ?>
+                    <li>
+                        <a href="<?= e(base_path() . '/' . $pluginPage['path']) ?>"<?= $adminPath === $pluginPage['path'] ? ' class="current"' : '' ?> title="<?= e($pluginPage['label']) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-<?= e($pluginPage['icon']) ?>"></use></svg><span><?= e($pluginPage['label']) ?></span></a>
+                    </li>
+                <?php endforeach; ?>
                 <li>
                     <a href="<?= base_path() ?>/admin/webmentions.php"<?= $adminPath === 'admin/webmentions.php' ? ' class="current"' : '' ?> title="<?= e(t('admin.nav.webmentions')) ?>"><svg class="icon" aria-hidden="true"><use href="#icon-globe"></use></svg><span><?= e(t('admin.nav.webmentions')) ?></span></a>
                 </li>

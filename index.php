@@ -42,6 +42,10 @@ if (str_ends_with($requestPath, '.md')) {
     exit;
 }
 
+if (plus_dispatch_public_route($requestPathWithSlash, $config)) {
+    exit;
+}
+
 if ($requestPath === 'social' && !empty(social_connection()['public_enabled'])) {
     require __DIR__ . '/social.php';
     exit;

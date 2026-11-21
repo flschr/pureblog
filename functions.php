@@ -128,6 +128,7 @@ function default_config(): array
             'providers' => [
                 'media.storage' => 'local-media',
                 'media.alt_suggestion' => '',
+                'media.photo_classification' => '',
             ],
             'settings' => [],
         ],

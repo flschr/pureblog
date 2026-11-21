@@ -11,6 +11,7 @@ $errors = [];
 $notice = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $previousConfig = $config;
     verify_csrf();
     $prepared = plus_prepare_plugin_configuration($config, $_POST);
     foreach ($prepared['errors'] as $error) {
@@ -26,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (save_config($config)) {
             $notice = t('admin.settings.plugins.notice_saved');
             $config = load_config(true);
+            plus_emit_plugin_event('configuration.saved', [$config, $previousConfig], $config);
         } else {
             $errors[] = t('admin.settings.plugins.error_save');
         }
@@ -63,6 +65,13 @@ require __DIR__ . '/../includes/admin-head.php';
                     <option value="<?= e($id) ?>"<?= ($providers['media.alt_suggestion'] ?? '') === $id ? ' selected' : '' ?>><?= e(plus_plugin_label($plugin, 'name')) ?></option>
                 <?php endforeach; ?>
             </select>
+            <label for="photo-provider"><b><?= e(t('admin.settings.plugins.photo_provider')) ?></b></label>
+            <select id="photo-provider" name="provider[media.photo_classification]">
+                <option value=""><?= e(t('admin.settings.plugins.none')) ?></option>
+                <?php foreach ($plugins as $id => $plugin): if (!isset($plugin['capabilities']['media.photo_classification'])) continue; ?>
+                    <option value="<?= e($id) ?>"<?= ($providers['media.photo_classification'] ?? '') === $id ? ' selected' : '' ?>><?= e(plus_plugin_label($plugin, 'name')) ?></option>
+                <?php endforeach; ?>
+            </select>
         </section>
         <?php foreach ($plugins as $id => $plugin): ?>
             <section class="settings-section">
@@ -79,6 +88,12 @@ require __DIR__ . '/../includes/admin-head.php';
                     <label for="plugin-<?= e($id . '-' . $key) ?>"><b><?= e(plus_plugin_setting_label($definition, $key)) ?></b></label>
                     <?php if (($definition['type'] ?? '') === 'checkbox'): ?>
                         <input id="plugin-<?= e($id . '-' . $key) ?>" type="checkbox" name="settings[<?= e($id) ?>][<?= e($key) ?>]" value="1"<?= !empty($values[$key]) ? ' checked' : '' ?>>
+                    <?php elseif (($definition['type'] ?? '') === 'select'): ?>
+                        <select id="plugin-<?= e($id . '-' . $key) ?>" name="settings[<?= e($id) ?>][<?= e($key) ?>]">
+                            <?php foreach ((array) ($definition['options'] ?? []) as $optionValue => $optionLabel): ?>
+                                <option value="<?= e((string) $optionValue) ?>"<?= (string) ($values[$key] ?? '') === (string) $optionValue ? ' selected' : '' ?>><?= e((string) $optionLabel) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     <?php else: ?>
                         <input id="plugin-<?= e($id . '-' . $key) ?>" type="<?= e($definition['type'] === 'password' ? 'password' : ($definition['type'] === 'url' ? 'url' : 'text')) ?>" name="settings[<?= e($id) ?>][<?= e($key) ?>]" value="<?= $definition['type'] === 'password' ? '' : e((string) ($values[$key] ?? '')) ?>">
                         <?php if ($definition['type'] === 'password' && ($values[$key] ?? '') !== ''): ?><p class="tip"><?= e(t('admin.settings.plugins.secret_preserved')) ?></p><?php endif; ?>

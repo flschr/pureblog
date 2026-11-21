@@ -1358,6 +1358,7 @@ function delete_post_by_slug(string $slug): bool
         webmention_sender_content_deleted('post', $slug);
         social_content_deleted($slug);
         call_hook('on_post_deleted', [$slug]);
+        plus_emit_plugin_event('post.deleted', [$slug]);
     }
     return $deleted;
 }
@@ -1421,6 +1422,7 @@ function save_post(array &$post, ?string $originalSlug = null, ?string $original
     }
     webmention_sender_content_saved('post', $post, $originalSlug, $originalStatus);
     social_content_saved($post, $originalSlug, $originalStatus);
+    plus_emit_plugin_event('post.saved', [$post, $originalSlug, $originalStatus]);
     return true;
 }
 

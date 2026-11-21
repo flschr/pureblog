@@ -44,7 +44,11 @@ try {
     plugin_media_assert(plus_has_capability('media.pipeline', 1, 0), 'Media capability missing.');
     plugin_media_assert(!is_dir(PUREBLOG_PLUS_DATA_PATH), 'Plugin discovery initialized storage eagerly.');
     $plugins = plus_plugins();
-    plugin_media_assert(array_keys($plugins) === ['local-media', 's3-media', 'openai-alt-text'], 'Unexpected bundled plugin set.');
+    plugin_media_assert(array_keys($plugins) === ['local-media', 's3-media', 'openai-alt-text', 'personal-photo-gallery'], 'Unexpected bundled plugin set.');
+    plugin_media_assert(isset($plugins['openai-alt-text']['capabilities']['media.photo_classification']), 'Bundled photo classifier is missing.');
+    plugin_media_assert(isset($plugins['personal-photo-gallery']['capabilities']['site.route']), 'Gallery route capability is missing.');
+    plugin_media_assert(count($plugins['personal-photo-gallery']['admin_pages'] ?? []) === 1, 'Gallery admin page contract is missing.');
+    plugin_media_assert(!plus_plugin_is_enabled('personal-photo-gallery'), 'Personal gallery must be opt-in.');
     plugin_media_assert(plus_plugin_provider('media.storage')['id'] === 'local-media', 'Local media is not the default.');
     plugin_media_assert(plus_enabled_plugin_ids(['plugins' => ['enabled' => []]]) === ['local-media'], 'Local fallback can be disabled.');
     $prepared = plus_prepare_plugin_configuration(default_config(), [
@@ -72,6 +76,7 @@ try {
     plugin_media_assert(is_string($s3PluginSource) && !str_contains($s3PluginSource, 'file_get_contents((string) $file[\'path\'])'), 'S3 uploads still buffer complete media files.');
     $altPluginSource = file_get_contents(dirname(__DIR__) . '/includes/plugins/openai-alt-text.php');
     plugin_media_assert(is_string($altPluginSource) && !str_contains($altPluginSource, 'base64_encode'), 'Alt-text requests still duplicate complete images in memory.');
+    plugin_media_assert(str_contains($altPluginSource, "'store' => false"), 'OpenAI media requests can retain gallery inputs.');
     $invalidPrepared = plus_prepare_plugin_configuration(default_config(), [
         'provider' => ['media.storage' => 's3-media', 'media.alt_suggestion' => ''],
         'settings' => ['s3-media' => ['endpoint' => 'http://private.test']],
@@ -101,6 +106,8 @@ try {
     plugin_media_assert(is_file((string) plus_media_by_url($media['url'])['local_source']), 'Private retained source is missing.');
     plus_set_media_default_alt($media['id'], "  A reusable blue image\n description.  ");
     $storedMedia = plus_media_by_url($media['url']);
+    plugin_media_assert(preg_match('/^[a-f0-9]{64}$/', (string) $storedMedia['source_fingerprint']) === 1, 'Normalized media fingerprint is missing.');
+    plugin_media_assert(in_array((int) $storedMedia['capture_metadata'], [0, 1], true) && in_array((int) $storedMedia['capture_time'], [0, 1], true), 'Privacy-minimised capture evidence is invalid.');
     plugin_media_assert($storedMedia['default_alt'] === 'A reusable blue image description.', 'Default media description was not normalized and stored.');
     $missingAlt = plus_missing_media_alt_suggestions('Before ![](' . $media['url'] . ') after');
     plugin_media_assert(count($missingAlt) === 1 && $missingAlt[0]['alt'] === $storedMedia['default_alt'], 'Missing contextual alt text did not expose the stored suggestion.');
