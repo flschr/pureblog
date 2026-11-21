@@ -140,6 +140,21 @@ try {
     test_assert($first['id'] === $duplicate['id'], 'Idempotent enqueue created a duplicate.');
     plus_enqueue_job('test.external', [], time() + 3600, 1, 'https://social.example/@author/123');
 
+    $maintenance = plus_enqueue_job('photo-gallery.classify', ['asset_key' => 'old-photo'], 900, 1);
+    $announcement = plus_enqueue_job('social.announce', ['slug' => 'new-post'], 950, 1);
+    $priorityClaim = plus_claim_job('priority-worker', 30, 1000);
+    test_assert(
+        $priorityClaim !== null && $priorityClaim['id'] === $announcement['id'],
+        'A social announcement waited behind older bulk maintenance.'
+    );
+    plus_complete_job((int) $priorityClaim['id'], 'priority-worker', 1000);
+    $maintenanceClaim = plus_claim_job('maintenance-worker', 30, 1000);
+    test_assert(
+        $maintenanceClaim !== null && $maintenanceClaim['id'] === $maintenance['id'],
+        'Background FIFO order was not preserved after the priority claim.'
+    );
+    plus_complete_job((int) $maintenanceClaim['id'], 'maintenance-worker', 1000);
+
     $claimed = plus_claim_job('worker-a', 30, 1000);
     test_assert($claimed !== null && $claimed['attempts'] === 1, 'Due job was not claimed.');
     test_assert(plus_claim_job('worker-b', 30, 1000) === null, 'Running job was claimed twice.');

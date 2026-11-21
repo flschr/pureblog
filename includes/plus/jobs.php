@@ -100,7 +100,10 @@ function plus_claim_job(string $workerId, int $leaseSeconds = 60, ?int $now = nu
             "SELECT id FROM plus_jobs WHERE attempts < max_attempts AND ("
             . "(state='queued' AND available_at <= ?) OR "
             . "(state='running' AND lease_until <= ?)) "
-            . "ORDER BY available_at ASC, id ASC LIMIT 1"
+            // A published post must not wait behind bulk maintenance such as a
+            // full gallery classification. Keep FIFO ordering inside each tier.
+            . "ORDER BY CASE WHEN type='social.announce' THEN 0 ELSE 1 END ASC, "
+            . "available_at ASC, id ASC LIMIT 1"
         );
         $select->execute([$now, $now]);
         $id = $select->fetchColumn();

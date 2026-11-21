@@ -1,14 +1,14 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.19",
+    "version": "3.9.2-plus.20",
     "upstream": "3.9.2",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
         "bin/plus-jobs.php": "a92f55730bc80ee082796d50cc021269eb7b9ba643dd26217967b436560e2d4d",
         "includes/plus/runtime.php": "b50da1cca54d9503b2b1b086dd6d1a3f2227f37271f14934b50e948e9fda57b9",
         "includes/plus/migrations.php": "de11977fe6c946cfedf1a46056b9cb62cb5d3621fca445df67e6d5b27887c612",
-        "includes/plus/jobs.php": "a30092938aff0d1f3d5a5810bc0d1b11bf4c6bd3b1da5968c67543f98ce36b2b",
+        "includes/plus/jobs.php": "90ea4e3ff25627c7f413e2eca132cc6bccbe976c39f832b6666d61967405e44d",
         "includes/plus/job-runner.php": "51726d746704a8d102960aff4bdae92db3b18457ab7a30c761b3f61e2b5ea68e",
         "includes/plus/capabilities.php": "c015f01bf11671cdb68f5675adb2541061dd53040c8a2ed218dc65999c14dab0",
         "includes/plus/plugins.php": "6c633724ec3865ce6fd14224929659e942e4d2320b0171d106ee465c9a191f08",
