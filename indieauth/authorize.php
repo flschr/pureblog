@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 require dirname(__DIR__) . '/functions.php';
-require_setup_redirect();
+require_configured_site();
 if (!indieauth_server_available()) {
     indieauth_send_json(['error' => 'temporarily_unavailable'], 503);
 }

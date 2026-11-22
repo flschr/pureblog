@@ -33,8 +33,7 @@ function _lang_load_file(string $language): array
 
 /**
  * Override the language used by t() — must be called before the first t() call.
- * Used by the setup wizard so the page can render in the selected language
- * before a config file exists.
+ * Allows a caller to select a language before persistent configuration is reloaded.
  */
 function lang_init(string $language): void
 {
@@ -65,7 +64,7 @@ function lang_available(): array
 
 /**
  * Return the loaded lang strings, lazily initialising from config on first call.
- * Respects lang_init() override if set (used during setup).
+ * Respects an explicit lang_init() override when present.
  * @internal
  */
 function _lang_strings(): array

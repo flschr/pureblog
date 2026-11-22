@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../functions.php';
 
-require_setup_redirect();
+require_configured_site();
 
 start_admin_session();
 maybe_restore_admin_from_cookie();
@@ -148,9 +148,6 @@ require __DIR__ . '/../includes/admin-head.php';
             </form>
         <?php else: ?>
             <h1><?= e(t('admin.login.heading')) ?></h1>
-            <?php if (!empty($_GET['setup'])): ?>
-                <p><?= e(t('admin.login.setup_complete')) ?></p>
-            <?php endif; ?>
             <?php if ($error !== ''): ?>
                 <p class="notice delete"><?= e($error) ?></p>
             <?php endif; ?>

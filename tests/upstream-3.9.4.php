@@ -55,5 +55,12 @@ if (class_exists('Imagick') || extension_loaded('gd')) {
 
 upstream_394_assert(!is_file(dirname(__DIR__) . '/api.php'), 'The unreviewed generic REST API was included.');
 upstream_394_assert(!function_exists('check_and_run_auto_update'), 'Automatic upstream updates were included.');
+upstream_394_assert(!is_file(dirname(__DIR__) . '/setup.php'), 'The retired public setup wizard was included.');
+upstream_394_assert(!is_file(dirname(__DIR__) . '/bin/setup-token.php'), 'The retired web-setup token command was included.');
+upstream_394_assert(!is_file(dirname(__DIR__) . '/upgrade-notice.json'), 'Retired updater metadata was included.');
+upstream_394_assert(!function_exists('create_site_backup_zip'), 'The browser backup archive path was included.');
+upstream_394_assert(!array_key_exists('community', default_config()), 'The retired PureComments configuration was included.');
+$postMeta = file_get_contents(dirname(__DIR__) . '/includes/post-meta.php');
+upstream_394_assert(is_string($postMeta) && !str_contains($postMeta, 'PureComments') && !str_contains($postMeta, 'purecomments'), 'The PureComments embed was included.');
 
 echo "upstream 3.9.4 integration tests: PASS\n";

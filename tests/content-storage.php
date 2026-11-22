@@ -43,6 +43,14 @@ try {
     test_assert(pureblog_valid_base_url('http://localhost:8000'), 'Local development URL was rejected.');
     test_assert(!pureblog_valid_base_url('http://example.com'), 'Insecure public site URL was accepted.');
 
+    $configurationClosed = false;
+    try {
+        require_configured_site();
+    } catch (RuntimeException $error) {
+        $configurationClosed = $error->getMessage() === 'Site configuration is unavailable.';
+    }
+    test_assert($configurationClosed, 'Missing configuration did not fail closed.');
+
     $target = $root . '/content/post.md';
     test_assert(pureblog_atomic_write_file($target, 'first'), 'Initial atomic write failed.');
     test_assert(file_get_contents($target) === 'first', 'Initial atomic write was incomplete.');

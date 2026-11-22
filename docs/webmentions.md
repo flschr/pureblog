@@ -16,7 +16,7 @@ recorded with a deleted status.
 Verified mentions remain private and are collected in **Admin → Webmentions**. The inbox
 can ignore an entry or restore it for later use, but Pure Blog Plus never renders incoming
 Webmentions on public posts or pages. Public comments and reactions belong to an optional
-PureComments integration, which is not part of this receiver.
+This component intentionally does not render them as public comments.
 
 Pure Blog Plus also sends Webmentions for external links in published posts and pages.
 Saving content only records local delivery jobs; endpoint discovery and network delivery

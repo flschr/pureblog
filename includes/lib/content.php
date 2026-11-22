@@ -185,12 +185,13 @@ function is_installed(): bool
     return !empty($config['admin_password_hash']);
 }
 
-function require_setup_redirect(): void
+function require_configured_site(): void
 {
-    if (!is_installed()) {
-        header('Location: ' . base_path() . '/setup.php');
-        exit;
-    }
+    if (is_installed()) return;
+    if (PHP_SAPI === 'cli') throw new RuntimeException('Site configuration is unavailable.');
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit("Site configuration is unavailable.\n");
 }
 
 // ---------------------------------------------------------------------------
