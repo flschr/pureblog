@@ -274,16 +274,7 @@ function micropub_properties_to_post(array $properties, array $commands = [], ?a
     if ($existing !== null) {
         $post['layout'] = (string) ($existing['layout'] ?? '');
         $post['feature_image'] = (string) ($existing['feature_image'] ?? '');
-        $post['layout_fields'] = [];
-        $reserved = array_fill_keys(array_merge([
-            'title', 'slug', 'date', 'timestamp', 'status', 'tags', 'description', 'content', 'path',
-            'layout', 'feature_image', 'categories', 'social_announce',
-        ], post_protocol_metadata_fields()), true);
-        foreach ($existing as $fieldName => $fieldValue) {
-            if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
-                $post['layout_fields'][$fieldName] = (string) $fieldValue;
-            }
-        }
+        $post['layout_fields'] = post_custom_front_matter_fields($existing);
         $post['social_announce'] = !empty($existing['social_announce']);
     }
     $requestedSyndication = $commands['mp-syndicate-to'] ?? [];

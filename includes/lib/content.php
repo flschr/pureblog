@@ -1197,6 +1197,7 @@ function save_page_locked(array &$page, ?string $originalSlug = null, ?string $o
     $status = trim($page['status'] ?? 'draft');
     $description = trim($page['description'] ?? '');
     $includeInNav = (bool) ($page['include_in_nav'] ?? true);
+    $customFields = is_array($page['custom_fields'] ?? null) ? $page['custom_fields'] : [];
     $content = str_replace("\r", '', $page['content'] ?? '');
     $content = plus_apply_media_alts_to_markdown($content, $title . "\n" . $description);
     $page['content'] = $content;
@@ -1258,6 +1259,13 @@ function save_page_locked(array &$page, ?string $originalSlug = null, ?string $o
 
     if ($featureImage !== '') {
         $frontMatter['feature_image'] = $featureImage;
+    }
+
+    foreach ($customFields as $fieldName => $fieldValue) {
+        $fieldName = trim((string) $fieldName);
+        if ($fieldName !== '') {
+            $frontMatter[$fieldName] = trim((string) $fieldValue);
+        }
     }
 
     $frontLines = _build_front_matter_lines($frontMatter);
@@ -1328,40 +1336,77 @@ function delete_page_by_slug_locked(string $slug): bool
     return true;
 }
 
-function update_front_matter_field(string $filepath, string $field, string $value): bool
+function post_custom_front_matter_fields(array $post): array
 {
-    return pureblog_with_content_mutation_lock(
-        static fn(): bool => update_front_matter_field_locked($filepath, $field, $value)
-    );
+    $reserved = array_fill_keys(array_merge([
+        'title', 'slug', 'date', 'timestamp', 'status', 'tags', 'description', 'content', 'path',
+        'layout', 'layout_fields', 'feature_image', 'categories', 'social_announce',
+    ], post_protocol_metadata_fields()), true);
+    $fields = [];
+    foreach ($post as $fieldName => $fieldValue) {
+        if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
+            $fields[$fieldName] = (string) $fieldValue;
+        }
+    }
+    return $fields;
 }
 
-function update_front_matter_field_locked(string $filepath, string $field, string $value): bool
+function page_custom_front_matter_fields(array $page): array
 {
-    $raw = file_get_contents($filepath);
-    if ($raw === false) {
-        return false;
-    }
-    $raw = str_replace("\r\n", "\n", $raw);
-
-    if (!preg_match('/\A(---\n.*?\n---\n)/s', $raw, $matches)) {
-        return false;
-    }
-    $frontBlock = $matches[1];
-    $body       = substr($raw, strlen($frontBlock));
-    $pattern    = '/^' . preg_quote($field, '/') . ':.*\n?/m';
-
-    if ($value !== '') {
-        $line = $field . ': ' . $value . "\n";
-        if (preg_match($pattern, $frontBlock)) {
-            $frontBlock = preg_replace($pattern, $line, $frontBlock);
-        } else {
-            $frontBlock = substr($frontBlock, 0, -4) . $line . "---\n";
+    $reserved = array_fill_keys([
+        'title', 'slug', 'status', 'description', 'include_in_nav', 'content', 'path',
+        'feature_image', 'custom_fields',
+    ], true);
+    $fields = [];
+    foreach ($page as $fieldName => $fieldValue) {
+        if (is_string($fieldName) && !isset($reserved[$fieldName]) && is_scalar($fieldValue)) {
+            $fields[$fieldName] = (string) $fieldValue;
         }
-    } else {
-        $frontBlock = preg_replace($pattern, '', $frontBlock);
+    }
+    return $fields;
+}
+
+function save_content_feature_image(
+    string $editorType,
+    string $slug,
+    string $featureImage,
+    ?string &$error = null
+): bool {
+    if ($editorType === 'post') {
+        $post = get_post_by_slug($slug, true);
+        if ($post === null) {
+            $error = 'Post not found.';
+            return false;
+        }
+        $post['layout_fields'] = post_custom_front_matter_fields($post);
+        $post['feature_image'] = $featureImage;
+        return save_post(
+            $post,
+            $slug,
+            (string) ($post['date'] ?? ''),
+            (string) ($post['status'] ?? 'draft'),
+            $error
+        );
     }
 
-    return pureblog_atomic_write_file($filepath, $frontBlock . $body);
+    if ($editorType === 'page') {
+        $page = get_page_by_slug($slug, true);
+        if ($page === null) {
+            $error = 'Page not found.';
+            return false;
+        }
+        $page['custom_fields'] = page_custom_front_matter_fields($page);
+        $page['feature_image'] = $featureImage;
+        return save_page(
+            $page,
+            $slug,
+            (string) ($page['status'] ?? 'draft'),
+            $error
+        );
+    }
+
+    $error = 'Unknown content type.';
+    return false;
 }
 
 function find_post_filepath_by_slug(string $slug): ?string

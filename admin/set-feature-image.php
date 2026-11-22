@@ -73,7 +73,8 @@ if ($url !== '' && ($managed = plus_media_by_url($url)) !== null && str_starts_w
     $featureValue = '';
 }
 
-if (!update_front_matter_field($filepath, 'feature_image', $featureValue)) {
+$saveError = '';
+if (!save_content_feature_image($editorType, $slug, $featureValue, $saveError)) {
     echo json_encode(['success' => false, 'error' => t('admin.editor.js_feature_image_failed')]);
     exit;
 }
