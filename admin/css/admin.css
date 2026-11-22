@@ -111,7 +111,6 @@
     --accent-color: #0055d4;
     --border-color: #222;
     --input-bg: #fafafa;
-    --subnav-bg: #dad7d7;
     --red: #af2e1b;
     --green: #1B5E20;
     --blue: #0055d4;
@@ -131,7 +130,6 @@ html[data-admin-theme="dark"] {
     --accent-hover: #5A9FB2;
     --border-color: #ccc;
     --input-bg: #1a1a1a;
-    --subnav-bg: #1a1a1a;
     --red: #ff8a80;
     --green: #A3BE8C;
     --blue: #88C0D0;
@@ -151,7 +149,6 @@ html[data-admin-theme="dark"] {
         --accent-hover: #5A9FB2;
         --border-color: #ccc;
         --input-bg: #1a1a1a;
-        --subnav-bg: #1a1a1a;
         --red: #ff8a80;
         --green: #A3BE8C;
         --blue: #88C0D0;
@@ -399,38 +396,6 @@ html[data-sidebar="collapsed"] .admin-nav .sidebar-toggle svg:last-child {
 
 html[data-sidebar="collapsed"] .admin-nav-list span {
     display: none;
-}
-
-html[data-sidebar="collapsed"] .admin-nav-list.sidebar-subnav li {
-    margin-left: 0;
-}
-
-html[data-sidebar="collapsed"] .admin-nav .sidebar-subnav a,
-html[data-sidebar="collapsed"] .admin-nav .sidebar-subnav .link-button {
-    padding-left: 1rem;
-}
-
-.admin-nav .sidebar-subnav a,
-.admin-nav .sidebar-subnav .link-button {
-    padding-left: 2rem;
-    font-weight: normal;
-    font-size: 0.9em;
-}
-
-.admin-nav .sidebar-subnav {
-    background-color: var(--subnav-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.admin-nav .sidebar-subnav a {
-    opacity: 0.6;
-}
-
-.admin-nav .sidebar-subnav a.current,
-.admin-nav .sidebar-subnav a:hover {
-    background: none;
-    color: var(--text-color);
-    opacity: 1;
 }
 
 ul.admin-nav-list .logout-item {

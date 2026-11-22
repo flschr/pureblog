@@ -418,21 +418,34 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
         return false;
     }
 
+    $ext = pathinfo($thumbPath, PATHINFO_EXTENSION);
+    $tmpPath = $thumbPath . '.' . bin2hex(random_bytes(6)) . '.tmp' . ($ext !== '' ? '.' . $ext : '');
+    $copyOriginalAtomically = static function () use ($sourcePath, $thumbPath, $tmpPath): bool {
+        if (!@copy($sourcePath, $tmpPath) || !is_file($tmpPath) || filesize($tmpPath) < 1) {
+            @unlink($tmpPath);
+            return false;
+        }
+        if (!@rename($tmpPath, $thumbPath)) {
+            @unlink($tmpPath);
+            return false;
+        }
+        return true;
+    };
+
     $sizeInfo = @getimagesize($sourcePath);
+    $isPotentiallyAnimated = is_array($sizeInfo)
+        && in_array((string) ($sizeInfo['mime'] ?? ''), ['image/gif', 'image/webp'], true);
     if (is_array($sizeInfo) && isset($sizeInfo[0], $sizeInfo[1])) {
         $infoW = (int) $sizeInfo[0];
         $infoH = (int) $sizeInfo[1];
-        if ($infoW > 0 && $infoH > 0 && $infoW <= $maxSize && $infoH <= $maxSize) {
-            return @copy($sourcePath, $thumbPath);
+        if (!$isPotentiallyAnimated && $infoW > 0 && $infoH > 0 && $infoW <= $maxSize && $infoH <= $maxSize) {
+            return $copyOriginalAtomically();
         }
         // Guard against extreme dimensions (>36 MP) when falling back to GD to avoid fatal OOM errors.
         if (!class_exists('Imagick') && ($infoW * $infoH) > 36_000_000) {
             return false;
         }
     }
-
-    $ext = pathinfo($thumbPath, PATHINFO_EXTENSION);
-    $tmpPath = $thumbPath . '.tmp' . ($ext !== '' ? '.' . $ext : '');
 
     if (class_exists('Imagick')) {
         try {
@@ -445,9 +458,9 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
                 $img->destroy();
                 return false;
             }
-            if ($w <= $maxSize && $h <= $maxSize) {
+            if (!$isPotentiallyAnimated && $w <= $maxSize && $h <= $maxSize) {
                 $img->destroy();
-                return @copy($sourcePath, $thumbPath);
+                return $copyOriginalAtomically();
             }
             $img->thumbnailImage($maxSize, $maxSize, true);
             $ok = $img->writeImage($tmpPath) && is_file($tmpPath) && filesize($tmpPath) > 0;
@@ -490,11 +503,11 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
             return false;
         }
 
-        if ($w <= $maxSize && $h <= $maxSize) {
-            return @copy($sourcePath, $thumbPath);
+        if (!$isPotentiallyAnimated && $w <= $maxSize && $h <= $maxSize) {
+            return $copyOriginalAtomically();
         }
 
-        $ratio = min($maxSize / $w, $maxSize / $h);
+        $ratio = min(1, $maxSize / $w, $maxSize / $h);
         $newW = max(1, (int) round($w * $ratio));
         $newH = max(1, (int) round($h * $ratio));
 
