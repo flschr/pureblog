@@ -797,6 +797,7 @@ return [
                 'heading'               => 'Updates',
                 'section_version'       => 'Version check',
                 'current_version'       => 'Current version:',
+                'deployment_managed'    => 'Updates are supplied by the owning deployment after compatibility checks, backup preparation, and rollback verification. This CMS does not download or install releases itself.',
                 'last_backup'           => 'Last backup:',
                 'unknown_time'          => 'Unknown time',
                 'repository'            => 'Repository:',

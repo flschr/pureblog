@@ -7,7 +7,7 @@ The original license and attribution remain in [LICENSE.md](../LICENSE.md).
 
 - `upstream`: `https://github.com/kevquirk/pureblog.git`
 - `origin`: `https://github.com/flschr/pureblog.git`
-- `main`: reviewed Pure Blog Plus releases and the base for feature branches
+- `main`: reviewed Pure Blog Plus component changes and the base for feature branches
 - feature work: a dedicated branch and pull request into `main`
 
 Do not rewrite upstream commits or copy a new upstream tree over Plus changes. Keep Plus
@@ -24,18 +24,21 @@ features in focused commits so an upstream release can be reviewed and integrate
 7. Open a pull request that records both upstream commits and any retained Plus differences.
 
 An upstream change to authentication, content persistence, media handling, routing, hooks, or
-updates requires an explicit review of the corresponding Plus owner before release.
+updates requires an explicit review of the corresponding Plus owner before deployment.
 
 ## Plus feature policy
 
-- Standalone blogging behavior must not require the optional connector.
+- Local development and recovery must not require the optional connector.
 - Optional integrations default to disconnected and fail without blocking the blog.
 - Persisted content remains plain Markdown; SQLite stores operational state only.
-- Product features use generic configuration and capability checks, never fischr.org constants.
+- The component contains no fischr.org infrastructure constants; a reusable boundary is
+  generalized only for a real second deployment.
 - A migration that replaces an older path names and removes that path; permanent dual writes
   are not accepted as an integration strategy.
-- Releases retain the Pure Blog license and make the upstream relationship visible.
+- Tags used by the owning deployment retain the Pure Blog license and make the upstream
+  relationship visible. They are source identities, not an in-app update channel.
 
-Plus releases use tags such as `v3.9.2-plus.1`, which identify both the integrated Pure Blog
-baseline and the Plus release. Pure Blog releases are integration inputs and are never applied
-directly to a Plus installation. See [the release contract](releases.md).
+Plus source identities use versions such as `3.9.4-plus.1`, which identify both the integrated
+Pure Blog baseline and the component revision. Pure Blog releases are integration inputs and
+are never applied directly to production. The fischr.org deployment records the exact
+component commit it verifies and installs.

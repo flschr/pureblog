@@ -1,6 +1,7 @@
 # Bundled plugins
 
-Pure Blog Plus ships a versioned plugin API for reviewed providers included in the release.
+Pure Blog Plus ships an internal plugin contract for reviewed providers used by the owning
+deployment. It may change together with fischr.org and is not a public compatibility promise.
 The Plugins settings page enables them and selects one provider for each exclusive
 capability. This first contract deliberately does not scan arbitrary directories, install
 ZIP files, or download executable code.
