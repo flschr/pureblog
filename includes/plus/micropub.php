@@ -149,7 +149,16 @@ function micropub_content_value(array $properties): array
 
 function micropub_note_title(string $content, string $published): string
 {
-    $plain = trim(preg_replace('/\s+/', ' ', strip_tags($content)) ?? '');
+    $visibleContent = preg_replace(
+        [
+            '/!\[[^\]\r\n]*\]\((?:[^()\r\n]|\([^()\r\n]*\))*\)/u',
+            '/!\[[^\]\r\n]*\]\[[^\]\r\n]*\]/u',
+            '/^\s*\[[^\]\r\n]+\]:\s+\S+.*$/mu',
+        ],
+        ' ',
+        $content
+    );
+    $plain = trim(preg_replace('/\s+/u', ' ', strip_tags($visibleContent ?? $content)) ?? '');
     if ($plain !== '') {
         return mb_substr($plain, 0, 80);
     }

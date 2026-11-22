@@ -73,6 +73,27 @@ try {
     $mediaHtml = render_post_media($note);
     micropub_test_assert(str_contains($mediaHtml, 'alt="Example"'), 'Photo accessibility text was not rendered.');
 
+    $noteWithMarkdownImages = micropub_properties_to_post([
+        'content' => [
+            "was für ein entwurf\n\n"
+            . '![Wand mit gelbem Neon-Schriftzug](https://media.example.test/one.png)' . "\n\n"
+            . '![Gegrillter Blumenkohl mit Brokkoli](https://media.example.test/two.png)',
+        ],
+        'published' => ['2026-11-22 23:50'],
+    ]);
+    micropub_test_assert(
+        $noteWithMarkdownImages['title'] === 'was für ein entwurf',
+        'Markdown image syntax or alt text leaked into the generated note title.'
+    );
+    $imageOnlyNote = micropub_properties_to_post([
+        'content' => ['![A descriptive image alt](https://media.example.test/image.png)'],
+        'published' => ['2026-11-22 23:50'],
+    ]);
+    micropub_test_assert(
+        str_starts_with($imageOnlyNote['title'], 'Note 2026-11-22'),
+        'An image-only note did not use the dated note-title fallback.'
+    );
+
     $videoPost = micropub_properties_to_post([
         'content' => ['A short video'],
         'video' => [['value' => 'https://example.test/clip.mp4', 'alt' => 'Fish feeding in an aquarium']],
