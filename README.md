@@ -1,19 +1,23 @@
 # Pure Blog Plus
 
-Pure Blog Plus is a maintained fork of [Pure Blog](https://github.com/kevquirk/pureblog),
-created by [Kev Quirk](https://kevquirk.com). It keeps Pure Blog's small,
-Markdown-first foundation and develops optional personal-publishing features around it.
+Pure Blog Plus is the public CMS component maintained for
+[fischr.org](https://fischr.org). It is a fork of
+[Pure Blog](https://github.com/kevquirk/pureblog), created by
+[Kev Quirk](https://kevquirk.com), and retains Pure Blog's license, attribution,
+Markdown-first foundation, and mergeable upstream history.
 
-The current Plus line is based on Pure Blog 3.9.4 and extends it with local-first
-IndieWeb publishing and an optional,
-loosely-coupled connection to GoToSocial Plus. Pure Blog Plus remains useful on its own;
-connecting another service is never required.
+The current Plus line is based on Pure Blog 3.9.4 and extends it with the IndieWeb,
+media, gallery, and optional GoToSocial capabilities required by fischr.org. The
+repository stays public so its fork history and component changes remain reviewable.
+It is not a separately supported distribution: there is no compatibility promise for
+unknown installations, no general support channel, and no in-app updater. Changes are
+driven by the real fischr.org product path; a second deployment is generalized only
+when it actually exists.
 
 See [the Plus architecture](docs/plus-architecture.md) for the agreed product boundaries
 and [the upstream workflow](docs/upstream.md) for how this fork follows Pure Blog. The
 [Plus runtime](docs/plus-runtime.md) documents lazy SQLite migrations, capabilities, and
-the local background-job queue used by optional protocols and connectors. The
-[release contract](docs/releases.md) describes versioning, package validation, and updates.
+the local background-job queue used by optional protocols and connectors.
 The [IndieAuth server](docs/indieauth.md) lets compatible applications obtain narrowly
 scoped credentials through the existing admin login and MFA flow. The local
 [Micropub server](docs/micropub.md) uses those credentials to create, read, update, and
@@ -56,15 +60,13 @@ Pure Blog is a simple, flat‑file blogging platform with a Markdown‑first edi
 > block. They prevent direct downloads of the private SQLite database, credentials, drafts,
 > and Markdown sources. Apache installations receive equivalent rules from `.htaccess`.
 
-## Getting started
-All you need to run Pure Blog is a host that supports PHP (pretty much all of them do). Once you have that, all you need to do is:
+## Development use
 
-1. Download the Pure Blog package.
-2. Extract the zip file and upload the contents to your web server.
-3. On the server, run `php bin/setup-token.php` once and keep the printed token private.
-4. Visit the URL of your blog, enter that token, and complete setup. You can instead provide
-   a `PUREBLOG_SETUP_TOKEN` environment variable when command-line access is unavailable.
-5. Once your site is setup, visit `/admin` and login to your new blog.
+The component keeps a local PHP/SQLite/filesystem mode because it is the smallest
+reproducible development and recovery environment for fischr.org. It is not an
+independently supported installation path. Production updates are assembled, verified,
+backed up, and rolled back by the owning deployment; the CMS never downloads or installs
+a release itself.
 
 ## Content
 Posts live in `content/posts` and pages live in `content/pages`. New admin and Micropub

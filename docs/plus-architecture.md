@@ -1,11 +1,13 @@
 # Pure Blog Plus architecture
 
-## Product outcome
+## Component outcome
 
-Pure Blog Plus is a small personal publishing CMS for one author. It works independently
-as a conventional blog and, over time, will add local-first IndieWeb publishing features.
-It can optionally connect to one personal social account without turning either product
-into a dependency of the other.
+Pure Blog Plus is the public, upstream-mergeable CMS component of fischr.org. fischr.org is
+the product and the only supported deployment. The component keeps a local
+PHP/SQLite/filesystem mode because that is the smallest reproducible development and
+recovery environment, not because unknown installations receive a compatibility promise.
+It can optionally connect to one personal social account without turning either component
+into a runtime dependency of the other.
 
 When connected to GoToSocial Plus, Pure Blog Plus owns the customizable combined website.
 GoToSocial Plus retains its own public profile and remains the sole owner of ActivityPub,
@@ -23,7 +25,7 @@ statuses, replies, follows, and federation.
 | Read-only social projection used by the combined website | Pure Blog Plus |
 
 There is one author identity per Pure Blog Plus installation and at most one connected
-social account. Neither product reads the other's database or filesystem.
+social account. Neither component reads the other's database or filesystem.
 
 ## Connector contract
 
@@ -43,11 +45,11 @@ stored so retries, edits, and deletions are deterministic.
 Social replies remain part of social threads. Webmentions to blog articles are a separate,
 moderated reaction type; the two are not collapsed into a second universal comment model.
 
-## Local-first deployment
+## Local-first recovery boundary
 
-The complete standalone CMS must work with PHP, SQLite, the local filesystem, and a local
-background-job mechanism. CDN, object storage, external backup providers, and hosted
-identity services are optional adapters rather than requirements.
+The CMS development and recovery mode must work with PHP, SQLite, the local filesystem,
+and a local background-job mechanism. Production is owned by fischr.org and may require
+its reviewed CDN, object storage, backup, and identity adapters.
 
 Markdown mutations use one installation-wide writer lock. New content is flushed to a
 same-directory temporary file and atomically renamed; slug/date changes and legacy image-folder
@@ -56,13 +58,14 @@ private trash before cleanup, so readers never observe half a rename or delete.
 
 Installation topology is deliberately independent: Pure Blog Plus and GoToSocial Plus can
 run on different hosts and be upgraded or disconnected separately. Unknown connector
-capabilities fail closed without preventing either standalone product from starting.
+capabilities fail closed without preventing either component from starting.
 
 ## Extension boundary
 
-General product behavior belongs in this repository. Site-specific themes, navigation,
-content imports, and compatibility migrations belong to the site using the product.
-fischr.org is the first reference installation, not a source of hard-coded product rules.
+Reusable CMS behavior required by fischr.org belongs in this repository. Site-specific
+themes, navigation, infrastructure, content imports, and compatibility migrations remain
+in fischr.org. A boundary is generalized for another installation only after that
+installation exists; hypothetical consumers do not create compatibility obligations.
 
 Existing fischr.org URLs and metadata will be handled by a bounded importer with an explicit
 removal condition. Permanent dual reads, dual writes, and Eleventy compatibility branches
@@ -74,10 +77,11 @@ are not part of the product architecture.
 - Turn GoToSocial Plus into a long-form blog CMS.
 - Require GoToSocial Plus, Cloudflare, R2, GitHub Actions, or another hosted service.
 - Share credentials, sessions, a database, or a filesystem between the two products.
-- Add multi-author or multiple-connected-account behavior to the first product version.
-- Move fischr.org-specific rendering or migration rules into the generic CMS core.
+- Add multi-author or multiple-connected-account behavior without a fischr.org requirement.
+- Move fischr.org-specific rendering, infrastructure, or migration rules into the CMS core.
+- Provide a general installation, support, plugin-compatibility, or in-app update promise.
 
-## Delivery order
+## Historical delivery order
 
 1. Establish the maintained fork, upstream update workflow, and unchanged baseline.
 2. Define module, migration, job, and capability boundaries inside Pure Blog Plus.
@@ -85,5 +89,6 @@ are not part of the product architecture.
 4. Add the optional social connector and durable read-only projection.
 5. Migrate fischr.org through an explicit importer and remove superseded external paths.
 
-Each stage must leave standalone Pure Blog Plus usable and must delete any superseded path
-in the same migration that replaces it.
+Each stage had to keep the local recovery boundary usable and delete any superseded path
+in the same migration that replaced it. New work is now driven by the fischr.org product
+contract rather than a separate Pure Blog Plus roadmap.

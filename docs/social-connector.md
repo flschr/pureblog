@@ -4,7 +4,7 @@ Pure Blog Plus can optionally connect one Mastodon-compatible account, including
 single-user GoToSocial or GoToSocial Plus instance. The connection is deliberately an API
 boundary: Pure Blog never reads the social server's database, filesystem, session, or
 configuration, and the social server does not need access to Pure Blog internals. Either
-product remains usable when the other is offline or disconnected.
+component remains usable when the other is offline or disconnected.
 
 The owner enters the HTTPS server origin under **Settings → Social** and authorizes Pure
 Blog through OAuth. Dynamic app registration and the standard Mastodon-compatible API are

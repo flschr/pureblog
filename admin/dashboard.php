@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
-require_once __DIR__ . '/../includes/updater.php';
 
 $config = load_config();
 $blogPostsEnabled = $config['enable_blog_posts'] ?? true;
@@ -146,22 +145,7 @@ for ($d = 1; $d <= 7; $d++) {
     $dayLabels[$d] = t('date.days_short.' . ($d % 7));
 }
 
-// Version check — cached for 6 hours to avoid a GitHub API call on every load
-$currentVersion   = detect_current_pureblog_version();
-$versionCacheFile = PUREBLOG_BASE_PATH . '/content/.version-cache';
-$latestVersion    = '';
-$cacheAge         = is_file($versionCacheFile) ? (time() - (int) @filemtime($versionCacheFile)) : PHP_INT_MAX;
-if ($cacheAge > 21600) {
-    $release = fetch_latest_pureblog_release();
-    if ($release['ok'] && $release['tag'] !== '') {
-        $latestVersion = $release['tag'];
-    }
-    @file_put_contents($versionCacheFile, $latestVersion);
-} else {
-    $cached = @file_get_contents($versionCacheFile);
-    $latestVersion = is_string($cached) ? trim($cached) : '';
-}
-$updateAvailable = $latestVersion !== '' && pureblog_plus_update_available($currentVersion, $latestVersion);
+$currentVersion = detect_current_pureblog_version();
 
 $fontStack  = font_stack_css($config['theme']['admin_font_stack'] ?? 'sans');
 $adminTitle = t('admin.dashboard.page_title');
@@ -176,11 +160,6 @@ require __DIR__ . '/../includes/admin-head.php';
             <div class="dashboard-stat-card dashboard-version-card">
                 <p class="dashboard-stat-label"><?= e(t('admin.dashboard.version_label')) ?></p>
                 <p class="dashboard-stat-value"><?= e($currentVersion) ?></p>
-                <?php if ($updateAvailable): ?>
-                    <a class="dashboard-version-update" href="<?= base_path() ?>/admin/settings-updates.php"><?= e(t('admin.dashboard.version_update_link', ['latest' => $latestVersion])) ?></a>
-                <?php elseif ($latestVersion !== ''): ?>
-                    <p class="dashboard-version-uptodate"><?= e(t('admin.dashboard.version_uptodate')) ?></p>
-                <?php endif; ?>
             </div>
             <?php else: ?>
             <div class="dashboard-stat-card"></div>

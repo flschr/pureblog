@@ -12,7 +12,6 @@ $settingsItems = [
     '/admin/settings-plugins.php' => ['label' => t('admin.settings.nav.plugins'), 'icon' => 'toggle-right'],
     '/admin/settings-social.php'  => ['label' => t('admin.settings.nav.social'),  'icon' => 'globe'],
     '/admin/settings-user.php'    => ['label' => t('admin.settings.nav.user'),    'icon' => 'user'],
-    '/admin/settings-updates.php' => ['label' => t('admin.settings.nav.updates'), 'icon' => 'upgrade'],
 ];
 $settingsSaveFormId = $settingsSaveFormId ?? '';
 ?>
