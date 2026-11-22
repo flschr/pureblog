@@ -165,6 +165,16 @@ try {
     test_assert(array_slice($GLOBALS['_pureblog_test_side_effects'], $sideEffectsBefore) === ['webmention:page'], 'Page side effects did not use the canonical save lifecycle exactly once.');
     test_assert(!save_content_feature_image('post', 'missing', '/missing.jpg', $saveError) && $saveError === 'Post not found.', 'Missing content was not rejected by the feature-image writer.');
     test_assert(!function_exists('update_front_matter_field'), 'The superseded direct front-matter writer is still available.');
+    test_assert(!function_exists('maybe_publish_scheduled_posts'), 'The request-driven scheduler is still available.');
+
+    $duePostPath = PUREBLOG_POSTS_PATH . '/2000-01-01-due.md';
+    $futurePostPath = PUREBLOG_POSTS_PATH . '/2099-01-01-future.md';
+    file_put_contents($duePostPath, "---\ntitle: Due\nslug: due\ndate: 2000-01-01 12:00\nstatus: scheduled\ntags: []\n---\n\nDue body.\n");
+    file_put_contents($futurePostPath, "---\ntitle: Future\nslug: future\ndate: 2099-01-01 12:00\nstatus: scheduled\ntags: []\n---\n\nFuture body.\n");
+    test_assert(publish_scheduled_posts() === 1, 'The explicit scheduler did not publish exactly one due post.');
+    test_assert((parse_post_file($duePostPath)['front_matter']['status'] ?? '') === 'published', 'The due post remained scheduled.');
+    test_assert((parse_post_file($futurePostPath)['front_matter']['status'] ?? '') === 'scheduled', 'The future post was published early.');
+    test_assert(publish_scheduled_posts() === 0, 'The explicit scheduler published the same post twice.');
 
     $deletedContent = $root . '/content/delete.md';
     $deletedImages = $root . '/images/delete';

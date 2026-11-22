@@ -149,8 +149,31 @@ function load_config(bool $reload = false): array
     return $cfg = array_replace_recursive(default_config(), $config);
 }
 
+function pureblog_local_php_extensions_enabled(): bool
+{
+    return getenv('PUREBLOG_DISABLE_LOCAL_PHP') !== '1';
+}
+
+function pureblog_runtime_hooks_path(): ?string
+{
+    $configured = getenv('PUREBLOG_RUNTIME_HOOKS_PATH');
+    if ($configured === false || trim($configured) === '') {
+        return null;
+    }
+
+    $resolved = realpath($configured);
+    if ($resolved === false || !is_file($resolved)) {
+        throw new RuntimeException('The configured Pure Blog runtime hooks file is unavailable.');
+    }
+
+    return $resolved;
+}
+
 function load_hooks(): void
 {
+    if (!pureblog_local_php_extensions_enabled()) {
+        return;
+    }
     if (is_file(PUREBLOG_HOOKS_PATH)) {
         require_once PUREBLOG_HOOKS_PATH;
     }
@@ -166,12 +189,14 @@ require __DIR__ . '/includes/lib/cache.php';
 require __DIR__ . '/includes/plus/runtime.php';
 
 
-$_userFunctions = PUREBLOG_BASE_PATH . '/content/functions.php';
-if (is_file($_userFunctions)) {
-    require $_userFunctions;
+$_runtimeHooks = pureblog_runtime_hooks_path();
+if ($_runtimeHooks !== null) {
+    require $_runtimeHooks;
+} elseif (pureblog_local_php_extensions_enabled()) {
+    $_userFunctions = PUREBLOG_BASE_PATH . '/content/functions.php';
+    if (is_file($_userFunctions)) {
+        require $_userFunctions;
+    }
+    unset($_userFunctions);
 }
-unset($_userFunctions);
-
-if (PHP_SAPI !== 'cli') {
-    maybe_publish_scheduled_posts();
-}
+unset($_runtimeHooks);

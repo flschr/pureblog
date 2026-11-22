@@ -29,7 +29,7 @@ $isAdminLoggedIn = is_admin_logged_in();
             $layoutName = preg_replace('/[^a-zA-Z0-9_-]/', '', trim((string) ($post['layout'] ?? ''))) ?? '';
             $layoutFile = PUREBLOG_BASE_PATH . '/content/layouts/' . $layoutName . '.php';
             ?>
-            <?php if ($layoutName !== '' && is_file($layoutFile)): ?>
+            <?php if (pureblog_local_php_extensions_enabled() && $layoutName !== '' && is_file($layoutFile)): ?>
                 <?php render_layout_file($layoutFile, $post, $config, $adjacentPosts); ?>
             <?php else: ?>
             <article>

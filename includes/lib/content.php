@@ -739,6 +739,13 @@ function format_post_date_for_rss(?string $value, array $config): string
 
 function publish_scheduled_posts(): int
 {
+    return pureblog_with_content_mutation_lock(
+        static fn(): int => publish_scheduled_posts_locked()
+    );
+}
+
+function publish_scheduled_posts_locked(): int
+{
     if (!is_dir(PUREBLOG_POSTS_PATH)) {
         return 0;
     }
@@ -783,23 +790,6 @@ function publish_scheduled_posts(): int
     }
 
     return $count;
-}
-
-function maybe_publish_scheduled_posts(): void
-{
-    if (!is_dir(PUREBLOG_POSTS_PATH)) {
-        return;
-    }
-
-    $lockFile = PUREBLOG_POSTS_PATH . '/.scheduler.lock';
-    $interval = 300; // 5 minutes
-
-    if (is_file($lockFile) && (time() - (int) filemtime($lockFile)) < $interval) {
-        return;
-    }
-
-    @file_put_contents($lockFile, (string) time());
-    publish_scheduled_posts();
 }
 
 // ---------------------------------------------------------------------------
