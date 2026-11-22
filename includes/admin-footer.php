@@ -81,7 +81,7 @@
                 setTimeout(() => notice.remove(), 250);
             });
             const url = new URL(window.location.href);
-            ['saved', 'deleted', 'uploaded', 'upload_error', 'updated', 'setup'].forEach((param) => {
+            ['saved', 'deleted', 'uploaded', 'upload_error', 'updated'].forEach((param) => {
                 url.searchParams.delete(param);
             });
             window.history.replaceState({}, document.title, url.toString());

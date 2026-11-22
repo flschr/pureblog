@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/functions.php';
 
-require_setup_redirect();
+require_configured_site();
 
 // Basic request parsing + route flags.
 $config = load_config();
@@ -79,7 +79,6 @@ $reservedPaths = [
     '',
     'index.php',
     'post.php',
-    'setup.php',
     'page.php',
 ];
 $isSingle = !$isTag && $requestPath !== ''

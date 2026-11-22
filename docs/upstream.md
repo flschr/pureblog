@@ -20,7 +20,7 @@ features in focused commits so an upstream release can be reviewed and integrate
 3. Create a dedicated update branch from current Pure Blog Plus `main`.
 4. Merge the selected upstream commit without squashing away its history.
 5. Resolve conflicts at the canonical owner instead of adding compatibility branches.
-6. Run setup, upgrade, editor, content, feed, and Plus-module verification.
+6. Run configuration-gate, editor, content, feed, and Plus-module verification.
 7. Open a pull request that records both upstream commits and any retained Plus differences.
 
 An upstream change to authentication, content persistence, media handling, routing, hooks, or

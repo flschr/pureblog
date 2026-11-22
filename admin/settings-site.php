@@ -44,30 +44,7 @@ $pages = get_all_pages(true);
 $pageOptions = array_values(array_filter($pages, fn($page) => ($page['slug'] ?? '') !== ''));
 $pageSlugLookup = array_fill_keys(array_map(fn($page) => $page['slug'], $pageOptions), true);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['download_backup'])) {
-    verify_csrf();
-    $backupResult = create_site_backup_zip();
-    if ($backupResult['ok'] ?? false) {
-        $zipPath = (string) $backupResult['path'];
-        $zipName = (string) $backupResult['filename'];
-        try {
-            while (ob_get_level() > 0) {
-                ob_end_clean();
-            }
-            header('Content-Type: application/zip');
-            header('Content-Disposition: attachment; filename="' . $zipName . '"');
-            header('Content-Length: ' . (string) filesize($zipPath));
-            header('Cache-Control: no-store, no-cache, must-revalidate');
-            readfile($zipPath);
-        } finally {
-            @unlink($zipPath);
-        }
-        exit;
-    }
-    $errors[] = (string) ($backupResult['error'] ?? t('admin.settings.site.error_backup_zip'));
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) && !isset($_POST['download_backup'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id'])) {
     verify_csrf();
     $siteTitle = trim($_POST['site_title'] ?? '');
     $siteTagline = trim($_POST['site_tagline'] ?? '');
@@ -98,9 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
     $adminHomepage = in_array($_POST['admin_homepage'] ?? '', ['dashboard', 'content'], true) ? $_POST['admin_homepage'] : 'dashboard';
     $adminHideDashboard = $adminHomepage === 'content' && !empty($_POST['admin_hide_dashboard']);
     $enableBlogPosts = ($blogPageSlug === $hiddenBlogValue) ? !empty($_POST['enable_blog_posts']) : true;
-    $purecommentsEnabled = !empty($_POST['purecomments_enabled']);
-    $purecommentsUrl = trim($_POST['purecomments_url'] ?? '');
-    $purecommentsAutoload = !empty($_POST['purecomments_autoload']);
 
     if ($siteTitle === '') {
         $errors[] = t('admin.settings.site.error_title');
@@ -140,14 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
         $errors[] = t('admin.settings.site.error_og_format');
     }
 
-    if ($purecommentsEnabled) {
-        if ($purecommentsUrl === '') {
-            $errors[] = t('admin.settings.site.error_purecomments_url');
-        } elseif (!filter_var($purecommentsUrl, FILTER_VALIDATE_URL)) {
-            $errors[] = t('admin.settings.site.error_purecomments_url_invalid');
-        }
-    }
-
     if (!$errors) {
         $config['site_title'] = $siteTitle;
         $config['site_tagline'] = $siteTagline;
@@ -177,9 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_action_id']) &
         $config['admin_homepage'] = $adminHomepage;
         $config['admin_hide_dashboard'] = $adminHideDashboard;
         $config['enable_blog_posts'] = $enableBlogPosts;
-        $config['community']['purecomments_enabled'] = $purecommentsEnabled;
-        $config['community']['purecomments_url'] = rtrim($purecommentsUrl, '/');
-        $config['community']['purecomments_autoload'] = $purecommentsAutoload;
 
         if (!isset($config['assets'])) {
             $config['assets'] = ['favicon' => '', 'apple_touch_icon' => '', 'og_image' => '', 'og_image_preferred' => 'banner', 'sidebar_logo' => ''];
@@ -292,13 +255,6 @@ require __DIR__ . '/../includes/admin-head.php';
                 <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>
                 <?= e(t('admin.settings.nav.save')) ?>
             </button>
-            <form method="post" class="inline-form">
-                <?= csrf_field() ?>
-                <button type="submit" name="download_backup" value="1" aria-label="<?= e(t('admin.settings.site.download_backup')) ?>">
-                    <svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg>
-                    <?= e(t('admin.settings.site.download_backup')) ?>
-                </button>
-            </form>
         </nav>
 
         <form method="post" enctype="multipart/form-data" id="settings-form">
@@ -441,25 +397,6 @@ require __DIR__ . '/../includes/admin-head.php';
             </section>
 
             <section class="section-divider">
-                <span class="title"><?= e(t('admin.settings.site.community_section')) ?></span>
-                <label class="inline-checkbox" for="purecomments_enabled">
-                    <input type="checkbox" id="purecomments_enabled" name="purecomments_enabled"<?= !empty($config['community']['purecomments_enabled']) ? ' checked' : '' ?>>
-                    <?= e(t('admin.settings.site.purecomments_enable')) ?>
-                </label>
-
-                <div id="purecomments_url_container" style="<?= !empty($config['community']['purecomments_enabled']) ? '' : 'display: none;' ?> margin-top: -0.75rem; margin-bottom: 1.5rem;">
-                    <label for="purecomments_url"><?= e(t('admin.settings.site.purecomments_url')) ?></label>
-                    <input type="url" id="purecomments_url" name="purecomments_url" value="<?= e($config['community']['purecomments_url'] ?? '') ?>" placeholder="https://comments.example.com"<?= !empty($config['community']['purecomments_enabled']) ? ' required' : ' disabled' ?>>
-
-                    <label class="inline-checkbox" for="purecomments_autoload" style="margin-top: -0.5rem;" title="<?= e(t('admin.settings.site.purecomments_autoload_tooltip')) ?>">
-                        <input type="checkbox" id="purecomments_autoload" name="purecomments_autoload"<?= !empty($config['community']['purecomments_autoload']) ? ' checked' : '' ?><?= !empty($config['community']['purecomments_enabled']) ? '' : ' disabled' ?>>
-                        <?= e(t('admin.settings.site.purecomments_autoload')) ?>
-                        <abbr title="<?= e(t('admin.settings.site.purecomments_autoload_tooltip')) ?>">(?)</abbr>
-                    </label>
-                </div>
-            </section>
-
-            <section class="section-divider">
                 <span class="title"><?= e(t('admin.settings.site.header_injects')) ?></span>
                 <label for="head_inject_page"><?= e(t('admin.settings.site.head_inject_page_label')) ?> <span class="tip">(<?= e(t('admin.settings.site.tip_optional')) ?>)</span></label>
                 <textarea id="head_inject_page" name="head_inject_page" rows="6" placeholder="&lt;meta name=&quot;x-custom&quot; content=&quot;value&quot;&gt;"><?= e($config['head_inject_page'] ?? '') ?></textarea>
@@ -522,22 +459,5 @@ require __DIR__ . '/../includes/admin-head.php';
         }
     });
 
-    const pureCommentsEnabledCheckbox = document.getElementById('purecomments_enabled');
-    const pureCommentsUrlContainer = document.getElementById('purecomments_url_container');
-    const pureCommentsUrlInput = document.getElementById('purecomments_url');
-    const pureCommentsAutoloadCheckbox = document.getElementById('purecomments_autoload');
-    pureCommentsEnabledCheckbox.addEventListener('change', function () {
-        if (this.checked) {
-            pureCommentsUrlContainer.style.display = '';
-            pureCommentsUrlInput.disabled = false;
-            pureCommentsUrlInput.required = true;
-            if (pureCommentsAutoloadCheckbox) pureCommentsAutoloadCheckbox.disabled = false;
-        } else {
-            pureCommentsUrlContainer.style.display = 'none';
-            pureCommentsUrlInput.disabled = true;
-            pureCommentsUrlInput.required = false;
-            if (pureCommentsAutoloadCheckbox) pureCommentsAutoloadCheckbox.disabled = true;
-        }
-    });
 </script>
 <?php require __DIR__ . '/../includes/admin-footer.php'; ?>

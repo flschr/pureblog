@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-if (!function_exists('font_stack_css') || !function_exists('require_setup_redirect')) {
+if (!function_exists('font_stack_css') || !function_exists('require_configured_site')) {
     header('Location: ' . (function_exists('base_path') ? base_path() : '') . '/');
     exit;
 }

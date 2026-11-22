@@ -118,11 +118,6 @@ function default_config(): array
             'og_image_preferred' => 'banner',
             'sidebar_logo' => '',
         ],
-        'community' => [
-            'purecomments_enabled' => false,
-            'purecomments_url' => '',
-            'purecomments_autoload' => false,
-        ],
         'plugins' => [
             'enabled' => ['local-media'],
             'providers' => [

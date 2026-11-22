@@ -1,4 +1,0 @@
-{
-    "breaking": false,
-    "instructions": "Gallery visual deduplication can now use an installation-provided local path resolver for historical media whose original local source is no longer retained. The resolver is optional and no remote media is fetched."
-}

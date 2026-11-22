@@ -24,7 +24,7 @@ scoped credentials through the existing admin login and MFA flow. The local
 delete Markdown posts and to upload media without a hosted publishing service. The local
 [Webmention support](docs/webmentions.md) sends reactions and verifies incoming ones in the
 private admin inbox without an external Webmention service. Public comments and reactions
-remain the responsibility of an optional PureComments integration.
+remain private moderation data and are not rendered as public comments.
 The [bundled plugin contract](docs/plugins.md) keeps local media as the standalone default
 and lets an owner explicitly select optional storage and alt-text providers.
 The optional [social connector](docs/social-connector.md) connects one Mastodon-compatible
