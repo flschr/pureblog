@@ -809,7 +809,6 @@ return [
                 'heading'               => 'Updates',
                 'section_version'       => 'Versionsprüfung',
                 'current_version'       => 'Aktuelle Version:',
-                'deployment_managed'    => 'Updates werden nach Kompatibilitätsprüfung, Sicherung und Rückwegprüfung durch das betreibende Deployment ausgeliefert. Dieses CMS lädt oder installiert selbst keine Releases.',
                 'last_backup'           => 'Letztes Backup:',
                 'unknown_time'          => 'Unbekannte Zeit',
                 'repository'            => 'Repository:',
