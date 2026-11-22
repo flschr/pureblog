@@ -1,4 +1,4 @@
 {
     "breaking": false,
-    "instructions": "Outgoing Webmentions now request API responses from content-negotiating receivers and classify missing targets or endpoints that return HTTP 404 or 410 as unsupported. Existing permanent target failures are reconciled during the upgrade, while temporary and other protocol errors remain visible and retryable."
+    "instructions": "Gallery visual deduplication can now use an installation-provided local path resolver for historical media whose original local source is no longer retained. The resolver is optional and no remote media is fetched."
 }
