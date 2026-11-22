@@ -16,17 +16,19 @@ $settingsItems = [
 ];
 $settingsSaveFormId = $settingsSaveFormId ?? '';
 ?>
-<ul class="settings-nav-list" aria-label="Settings sections">
-    <?php foreach ($settingsItems as $href => $item): ?>
-        <?php $isCurrent = $settingsPath === ltrim($href, '/'); ?>
-        <li>
-            <a href="<?= e($bp . $href) ?>"<?= $isCurrent ? ' class="current"' : '' ?>>
-                <svg class="icon" aria-hidden="true"><use href="#icon-<?= e($item['icon']) ?>"></use></svg>
-                <?= e($item['label']) ?>
-            </a>
-        </li>
-    <?php endforeach; ?>
-</ul>
+<nav class="settings-tabs-nav" aria-label="<?= e(t('admin.nav.settings')) ?>">
+    <ul class="settings-tabs-list">
+        <?php foreach ($settingsItems as $href => $item): ?>
+            <?php $isCurrent = $settingsPath === ltrim($href, '/'); ?>
+            <li class="settings-tab-item">
+                <a href="<?= e($bp . $href) ?>" class="settings-tab-link<?= $isCurrent ? ' active' : '' ?>">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-<?= e($item['icon']) ?>"></use></svg>
+                    <span><?= e($item['label']) ?></span>
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</nav>
 <?php if ($settingsSaveFormId !== ''): ?>
     <button class="save" type="submit" form="<?= e($settingsSaveFormId) ?>" aria-label="<?= e(t('admin.settings.nav.save')) ?>">
         <svg class="icon" aria-hidden="true"><use href="#icon-save"></use></svg>

@@ -419,27 +419,48 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
     }
 
     $ext = pathinfo($thumbPath, PATHINFO_EXTENSION);
-    $tmpPath = $thumbPath . '.tmp' . ($ext !== '' ? '.' . $ext : '');
+    $tmpPath = $thumbPath . '.' . bin2hex(random_bytes(6)) . '.tmp' . ($ext !== '' ? '.' . $ext : '');
+    $copyOriginalAtomically = static function () use ($sourcePath, $thumbPath, $tmpPath): bool {
+        if (!@copy($sourcePath, $tmpPath) || !is_file($tmpPath) || filesize($tmpPath) < 1) {
+            @unlink($tmpPath);
+            return false;
+        }
+        if (!@rename($tmpPath, $thumbPath)) {
+            @unlink($tmpPath);
+            return false;
+        }
+        return true;
+    };
+
+    $sizeInfo = @getimagesize($sourcePath);
+    $isPotentiallyAnimated = is_array($sizeInfo)
+        && in_array((string) ($sizeInfo['mime'] ?? ''), ['image/gif', 'image/webp'], true);
+    if (is_array($sizeInfo) && isset($sizeInfo[0], $sizeInfo[1])) {
+        $infoW = (int) $sizeInfo[0];
+        $infoH = (int) $sizeInfo[1];
+        if (!$isPotentiallyAnimated && $infoW > 0 && $infoH > 0 && $infoW <= $maxSize && $infoH <= $maxSize) {
+            return $copyOriginalAtomically();
+        }
+        // Guard against extreme dimensions (>36 MP) when falling back to GD to avoid fatal OOM errors.
+        if (!class_exists('Imagick') && ($infoW * $infoH) > 36_000_000) {
+            return false;
+        }
+    }
 
     if (class_exists('Imagick')) {
         try {
-            $img = new Imagick($sourcePath);
-            if ($img->getNumberImages() > 1) {
-                $img = $img->coalesceImages();
-                $img->setIteratorIndex(0);
-                $single = $img->getImage();
-                $img->destroy();
-                $img = $single;
-            }
+            $img = new Imagick();
+            // Append [0] so animated GIFs/WebPs only decode the first frame instead of all frames into RAM.
+            $img->readImage($sourcePath . '[0]');
             $w = $img->getImageWidth();
             $h = $img->getImageHeight();
             if ($w <= 0 || $h <= 0) {
                 $img->destroy();
                 return false;
             }
-            if ($w <= $maxSize && $h <= $maxSize) {
+            if (!$isPotentiallyAnimated && $w <= $maxSize && $h <= $maxSize) {
                 $img->destroy();
-                return @copy($sourcePath, $thumbPath);
+                return $copyOriginalAtomically();
             }
             $img->thumbnailImage($maxSize, $maxSize, true);
             $ok = $img->writeImage($tmpPath) && is_file($tmpPath) && filesize($tmpPath) > 0;
@@ -482,11 +503,11 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
             return false;
         }
 
-        if ($w <= $maxSize && $h <= $maxSize) {
-            return @copy($sourcePath, $thumbPath);
+        if (!$isPotentiallyAnimated && $w <= $maxSize && $h <= $maxSize) {
+            return $copyOriginalAtomically();
         }
 
-        $ratio = min($maxSize / $w, $maxSize / $h);
+        $ratio = min(1, $maxSize / $w, $maxSize / $h);
         $newW = max(1, (int) round($w * $ratio));
         $newH = max(1, (int) round($h * $ratio));
 
@@ -520,7 +541,7 @@ function generate_image_thumbnail(string $sourcePath, string $thumbPath, int $ma
 }
 
 /**
- * Get the thumbnail URL for an image in a slug folder, lazily generating it if missing.
+ * Get the thumbnail URL for an image in a slug folder, deferring generation to thumb.php if missing.
  */
 function get_image_thumb_url(string $slug, string $filename): string
 {
@@ -533,8 +554,8 @@ function get_image_thumb_url(string $slug, string $filename): string
         return $thumbUrl;
     }
 
-    if (is_file($sourcePath) && generate_image_thumbnail($sourcePath, $thumbPath)) {
-        return $thumbUrl;
+    if (is_file($sourcePath) && (class_exists('Imagick') || extension_loaded('gd'))) {
+        return base_path() . '/admin/thumb.php?slug=' . urlencode($slug) . '&file=' . urlencode($filename);
     }
 
     return $fullUrl;

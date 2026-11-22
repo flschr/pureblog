@@ -4,8 +4,8 @@ Pure Blog Plus is a maintained fork of [Pure Blog](https://github.com/kevquirk/p
 created by [Kev Quirk](https://kevquirk.com). It keeps Pure Blog's small,
 Markdown-first foundation and develops optional personal-publishing features around it.
 
-The current Plus line is based on Pure Blog 3.9.2. The first Plus release is being
-designed around local-first IndieWeb publishing and an optional,
+The current Plus line is based on Pure Blog 3.9.4 and extends it with local-first
+IndieWeb publishing and an optional,
 loosely-coupled connection to GoToSocial Plus. Pure Blog Plus remains useful on its own;
 connecting another service is never required.
 
