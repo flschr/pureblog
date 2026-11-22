@@ -68,6 +68,22 @@ independently supported installation path. Production updates are assembled, ver
 backed up, and rolled back by the owning deployment; the CMS never downloads or installs
 a release itself.
 
+Scheduled posts are published only by an explicit local scheduler, never as a side effect
+of a public or admin request. Run the following command from cron, systemd, or the owning
+deployment's serialized job runner:
+
+```sh
+php bin/publish-scheduled.php
+```
+
+The command prints a JSON result and exits non-zero on failure. Content mutations are
+additionally serialized by the component writer.
+
+Deployments that keep content writable can set `PUREBLOG_DISABLE_LOCAL_PHP=1` to
+disable PHP hooks, includes, routes, and layouts from mutable configuration and content
+directories. A reviewed, read-only integration hook can then be supplied explicitly via
+`PUREBLOG_RUNTIME_HOOKS_PATH`.
+
 ## Content
 Posts live in `content/posts` and pages live in `content/pages`. New admin and Micropub
 uploads share the selected media provider. The default stores public files under

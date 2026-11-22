@@ -612,9 +612,11 @@ function resolve_template_file(string $name, string $userDir, string $coreDir): 
         return null;
     }
 
-    $userPath = rtrim($userDir, '/') . '/' . $safeName . '.php';
-    if (is_file($userPath)) {
-        return $userPath;
+    if (pureblog_local_php_extensions_enabled()) {
+        $userPath = rtrim($userDir, '/') . '/' . $safeName . '.php';
+        if (is_file($userPath)) {
+            return $userPath;
+        }
     }
 
     $corePath = rtrim($coreDir, '/') . '/' . $safeName . '.php';
@@ -927,6 +929,10 @@ function parse_custom_routes(string $raw): array
 
 function resolve_custom_route_template(string $target): ?string
 {
+    if (!pureblog_local_php_extensions_enabled()) {
+        return null;
+    }
+
     $target = str_replace('\\', '/', trim($target));
     if ($target === '') {
         return null;
@@ -1126,6 +1132,10 @@ function paginate_posts(array $posts, int $perPage, int $currentPage): array
 
 function get_layouts(): array
 {
+    if (!pureblog_local_php_extensions_enabled()) {
+        return [];
+    }
+
     $dir = PUREBLOG_BASE_PATH . '/content/layouts';
     if (!is_dir($dir)) {
         return [];
@@ -1177,6 +1187,9 @@ function render_post_navigation(): string
 
 function render_layout_file(string $file, array $post, array $config, array $adjacentPosts): void
 {
+    if (!pureblog_local_php_extensions_enabled()) {
+        throw new RuntimeException('Local PHP layouts are disabled.');
+    }
     layout_context($post, $config, $adjacentPosts);
     include $file;
 }
