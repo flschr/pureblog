@@ -43,7 +43,7 @@ require __DIR__ . '/../includes/admin-head.php';
 <div class="admin-content">
     <header class="admin-content-header">
         <h1><?= e(t('admin.settings.plugins.heading')) ?></h1>
-        <nav class="admin-actions"><?php require __DIR__ . '/../includes/admin-settings-nav.php'; ?></nav>
+        <?php require __DIR__ . '/../includes/admin-settings-nav.php'; ?>
     </header>
     <?php if ($notice !== ''): ?><p class="notice"><?= e($notice) ?></p><?php endif; ?>
     <?php foreach ($errors as $error): ?><p class="notice delete"><?= e($error) ?></p><?php endforeach; ?>

@@ -78,69 +78,80 @@ $page        = min($page, $totalPages);
 $offset      = ($page - 1) * $perPage;
 $pageImages  = array_slice($allImages, $offset, $perPage);
 
-// Preload all posts and pages indexed by slug
-$contentBySlug = [];
-foreach (get_all_posts(true) as $p) {
-    if (!empty($p['slug'])) {
-        $contentBySlug[$p['slug']] = [
-            'title' => $p['title'] ?? $p['slug'],
-            'slug'  => $p['slug'],
-            'type'  => 'post',
-        ];
-    }
+// Build usage map and folder-slug lookup for the current page of images in a single pass
+$pageImageKeys = [];
+$pageSlugs     = [];
+foreach ($pageImages as $img) {
+    $pageImageKeys[$img['slug'] . '/' . $img['filename']] = true;
+    $pageSlugs[$img['slug']] = true;
 }
-foreach (get_all_pages(true) as $p) {
-    if (!empty($p['slug'])) {
-        $contentBySlug[$p['slug']] = [
-            'title' => $p['title'] ?? $p['slug'],
-            'slug'  => $p['slug'],
-            'type'  => 'page',
-        ];
+
+$contentBySlug = [];
+$usageMap      = [];
+$managedUsageMap = [];
+$managedUrlLookup = [];
+foreach ($pageImages as $managedImage) {
+    if (!empty($managedImage['managed_media'])) {
+        $managedUrlLookup[(string) $managedImage['url']] = true;
     }
 }
 
-// Build usage map by scanning all post/page .md files once
-$usageMap = [];
-$managedUsageMap = [];
-$managedUrlLookup = [];
-foreach ($allImages as $managedImage) {
-    if (!empty($managedImage['managed_media'])) $managedUrlLookup[(string) $managedImage['url']] = true;
-}
-foreach ([
-    ['dir' => PUREBLOG_POSTS_PATH, 'type' => 'post'],
-    ['dir' => PUREBLOG_PAGES_PATH, 'type' => 'page'],
-] as $source) {
-    if (!is_dir($source['dir'])) {
-        continue;
-    }
-    foreach (glob($source['dir'] . '/*.md') ?: [] as $mdFile) {
-        $raw = file_get_contents($mdFile);
-        if ($raw === false) {
+if ($pageImages) {
+    foreach ([
+        ['dir' => PUREBLOG_POSTS_PATH, 'type' => 'post'],
+        ['dir' => PUREBLOG_PAGES_PATH, 'type' => 'page'],
+    ] as $source) {
+        if (!is_dir($source['dir'])) {
             continue;
         }
-        $parsed = parse_post_file($mdFile);
-        $front  = $parsed['front_matter'];
-        $entry  = [
-            'title' => $front['title'] ?? basename($mdFile),
-            'slug'  => $front['slug'] ?? '',
-            'type'  => $source['type'],
-        ];
-        if (preg_match_all('#https?://[^\s\)\'"<>]+#', $raw, $managedMatches)) {
-            foreach (array_unique($managedMatches[0]) as $managedUrl) {
-                if (isset($managedUrlLookup[$managedUrl])) $managedUsageMap[$managedUrl][] = $entry;
-            }
-        }
-        if (!preg_match_all('#/content/images/([^/\s\)\'"]+)/([^\s\)\'"]+)#', $raw, $matches, PREG_SET_ORDER)) {
-            continue;
-        }
-        $seenKeys = [];
-        foreach ($matches as $match) {
-            $key = $match[1] . '/' . $match[2];
-            if (isset($seenKeys[$key])) {
+        foreach (glob($source['dir'] . '/*.md') ?: [] as $mdFile) {
+            $raw = file_get_contents($mdFile);
+            if ($raw === false) {
                 continue;
             }
-            $seenKeys[$key] = true;
-            $usageMap[$key][] = $entry;
+
+            $matchedKeys = [];
+            if (str_contains($raw, '/content/images/') &&
+                preg_match_all('#/content/images/([^/\s\)\'"]+)/([^\s\)\'"]+)#', $raw, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $key = $match[1] . '/' . $match[2];
+                    if (isset($pageImageKeys[$key])) {
+                        $matchedKeys[$key] = true;
+                    }
+                }
+            }
+
+            $rawNorm = str_replace("\r\n", "\n", $raw);
+            $front   = [];
+            if (str_starts_with($rawNorm, "---\n")) {
+                $endPos = strpos($rawNorm, "\n---\n", 4);
+                if ($endPos !== false) {
+                    $front = _parse_front_matter_lines(explode("\n", substr($rawNorm, 4, $endPos - 4)));
+                }
+            }
+
+            $slug  = (string) ($front['slug'] ?? '');
+            $entry = [
+                'title' => $front['title'] ?? ($slug !== '' ? $slug : basename($mdFile)),
+                'slug'  => $slug,
+                'type'  => $source['type'],
+            ];
+
+            if ($managedUrlLookup && preg_match_all('#https?://[^\s\)\'"<>]+#', $raw, $managedMatches)) {
+                foreach (array_unique($managedMatches[0]) as $managedUrl) {
+                    if (isset($managedUrlLookup[$managedUrl])) {
+                        $managedUsageMap[$managedUrl][] = $entry;
+                    }
+                }
+            }
+
+            if ($slug !== '' && isset($pageSlugs[$slug])) {
+                $contentBySlug[$slug] = $entry;
+            }
+
+            foreach (array_keys($matchedKeys) as $key) {
+                $usageMap[$key][] = $entry;
+            }
         }
     }
 }

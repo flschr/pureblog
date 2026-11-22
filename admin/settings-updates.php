@@ -100,7 +100,8 @@ require __DIR__ . '/../includes/admin-head.php';
 ?>
     <main class="mid">
         <h1><?= e(t('admin.settings.updates.heading')) ?></h1>
-
+        <?php require __DIR__ . '/../includes/admin-settings-nav.php'; ?>
+        <?php require __DIR__ . '/../includes/admin-notices.php'; ?>
 
         <section class="section-divider">
             <span class="title"><?= e(t('admin.settings.updates.section_version')) ?></span>

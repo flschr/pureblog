@@ -1,8 +1,8 @@
 {
     "schema": 1,
     "product": "pureblog-plus",
-    "version": "3.9.2-plus.26",
-    "upstream": "3.9.2",
+    "version": "3.9.4-plus.1",
+    "upstream": "3.9.4",
     "protected_files": {
         "LICENSE.md": "68f47aa87e0fa1ff6d422fc0de760aee6aa06955678aae568234fe6f6f1d2b78",
         "bin/plus-jobs.php": "a92f55730bc80ee082796d50cc021269eb7b9ba643dd26217967b436560e2d4d",
@@ -33,9 +33,9 @@
         "webmention/index.php": "af25bb550b72eca26cff9af60e2b0267f648f51a7748afa786b9ba9b70108458",
         "admin/webmentions.php": "39cbc78028ec837c665a53d2bc13348ca8c6284670dac5ade9f3053408723727",
         "admin/gallery.php": "e1cbbf67565678813de1df865ce5a359a1755dd6032e8648197cd6c8aea88375",
-        "admin/images.php": "983124abd3ee2ececa796baa6c5c7e6c85a25fd88f714551383fdfb7ec44010c",
-        "admin/settings-plugins.php": "cd68217a2dc6edc41dc078137fb495f8bfe5a7969991122184ae9e6d0a140c60",
-        "admin/settings-social.php": "ae7e4281640322444b024c89fbc16434630c6cc64ebe080b7036dedfd24ac779",
+        "admin/images.php": "1fc3a204d5bfcd1ce146a9c8fbe379c2e672f6b1f92e57aa6295fc8960660b96",
+        "admin/settings-plugins.php": "4754394e8e742eee7de349873627ffb143c0627d4484c0dade2e72952cf7c6dd",
+        "admin/settings-social.php": "cb9eb1a921ce2e88ae088f09b2c0e6c28f1628881df601e77f03bbd380a65db8",
         "admin/social-callback.php": "8682883101a1ac67b3c2dd48c78a261b2ae6c18f1e5550ed32b3fd8d8f02ae41",
         "social.php": "4dbffb139ebc404fb54f615d3ac2c54dbdcac3c2d352943b9f7ef1b76b6b779e",
         "admin/media-alt-text.php": "71343ff28c79cfe8ae9c40d5cdd5f2b688c3f33d95809019c80fc17f1d66f218",
